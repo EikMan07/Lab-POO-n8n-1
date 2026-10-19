@@ -1,0 +1,100 @@
+{
+  "facturas": [
+    {
+      "id": "FAC-001",
+      "cliente": "Distribuidora del Pacífico S.A.",
+      "tipoCliente": "regular",
+      "monto": 250000,
+      "fechaEmision": "2026-09-10",
+      "plazoDiasHabiles": 15,
+      "estado": "vencida",
+      "fechaVencimiento": "2026-10-02",
+      "diasHabilesRestantes": -11,
+      "recargoMora": 12500,
+      "montoTotalConMora": 262500,
+      "alertaPrioridad": "VENCIDA - Cobro inmediato"
+    },
+    {
+      "id": "FAC-002",
+      "cliente": "Corporación Transnacional Alajuela S.A.",
+      "tipoCliente": "vip",
+      "monto": 800000,
+      "fechaEmision": "2026-09-01",
+      "estado": "vencida",
+      "fechaVencimiento": "2026-09-30",
+      "diasHabilesRestantes": -13,
+      "recargoMora": 16000,
+      "montoTotalConMora": 816000,
+      "alertaPrioridad": "VENCIDA - Cobro inmediato"
+    },
+    {
+      "id": "FAC-003",
+      "cliente": "Comercializadora San José Limitada",
+      "tipoCliente": "regular",
+      "monto": 420000,
+      "fechaEmision": "2026-10-01",
+      "plazoDiasHabiles": 15,
+      "estado": "pendiente",
+      "fechaVencimiento": "2026-10-22",
+      "diasHabilesRestantes": 3,
+      "recargoMora": 0,
+      "montoTotalConMora": 420000,
+      "alertaPrioridad": "ALTA - Próxima a vencer"
+    },
+    {
+      "id": "FAC-004",
+      "cliente": "Tecnologías Globales de Cartago S.A.",
+      "tipoCliente": "vip",
+      "monto": 1250000,
+      "fechaEmision": "2026-10-12",
+      "estado": "pendiente",
+      "fechaVencimiento": "2026-11-09",
+      "diasHabilesRestantes": 15,
+      "recargoMora": 0,
+      "montoTotalConMora": 1250000,
+      "alertaPrioridad": "NORMAL"
+    },
+    {
+      "id": "FAC-005",
+      "cliente": "Ferretería El Tornillo Oxidado",
+      "tipoCliente": "regular",
+      "monto": -50000,
+      "fechaEmision": "2026-10-05",
+      "plazoDiasHabiles": 15,
+      "estado": "pendiente"
+    },
+    {
+      "id": "FAC-006",
+      "cliente": "Supermercado La Confianza",
+      "tipoCliente": "regular",
+      "monto": 310000,
+      "fechaEmision": "2026-02-31",
+      "plazoDiasHabiles": 15,
+      "estado": "pendiente"
+    },
+    {
+      "id": "FAC-007",
+      "cliente": "Servicios Logísticos del Caribe S.A.",
+      "tipoCliente": "regular",
+      "monto": 185000,
+      "fechaEmision": "2026-10-05",
+      "plazoDiasHabiles": 10,
+      "estado": "pendiente",
+      "fechaVencimiento": "2026-10-19",
+      "diasHabilesRestantes": 0,
+      "recargoMora": 0,
+      "montoTotalConMora": 185000,
+      "alertaPrioridad": "ALTA - Próxima a vencer"
+    },
+    {
+      "id": "FAC-008",
+      "cliente": "Hotel Punta Leona Beach Resort",
+      "tipoCliente": "vip",
+      "monto": 950000,
+      "fechaEmision": "2026-08-15",
+      "plazoDiasHabiles": 20,
+      "estado": "pagada"
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}

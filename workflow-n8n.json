@@ -1,0 +1,259 @@
+{
+  "name": "Laboratorio 1 - Central de Facturación con Días Hábiles (POO)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        180,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-trigger",
+      "name": "Schedule Trigger (08:00 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        180,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://date.nager.at/api/v3/PublicHolidays/2026/CR",
+        "options": {}
+      },
+      "id": "node-http-feriados",
+      "name": "Consultar Feriados CR API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3000/facturas?estado=pendiente",
+        "options": {}
+      },
+      "id": "node-http-facturas",
+      "name": "Obtener Facturas Pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "node-merge-inputs",
+      "name": "Sincronizar Entradas",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ============================================================================\n// NODO n8n: Code - Procesar Facturas y Calendario Laboral (POO)\n// MODO: Run Once for All Items\n// DESCRIPCIÓN: Implementación en JavaScript ES6+ puro (POO) del Calendario\n// Laboral para Costa Rica y la entidad Factura con las 5 Reglas de Negocio\n// y manejo defensivo de fallos de red / datos corruptos.\n// ============================================================================\n\n// ----------------------------------------------------------------------------\n// CLASE 1: CalendarioLaboral (POO pura)\n// ----------------------------------------------------------------------------\nclass CalendarioLaboral {\n  static FERIADOS_BASE_CR_2026 = [\n    '2026-01-01', // Año Nuevo\n    '2026-04-02', // Jueves Santo\n    '2026-04-03', // Viernes Santo\n    '2026-04-11', // Día de Juan Santamaría\n    '2026-05-01', // Día Internacional del Trabajo\n    '2026-07-25', // Anexión del Partido de Nicoya\n    '2026-08-02', // Fiesta de Nuestra Señora de los Ángeles\n    '2026-08-15', // Día de la Madre\n    '2026-09-15', // Día de la Independencia\n    '2026-12-01', // Día de la Abolición del Ejército\n    '2026-12-25'  // Navidad\n  ];\n\n  constructor({ anio = 2026, pais = 'CR', feriadosRaw = [] } = {}) {\n    this.anio = Number(anio) || 2026;\n    this.pais = String(pais || 'CR').toUpperCase();\n    this.modoContingenciaSinAPI = false;\n    this.feriados = this.#normalizarFeriados(feriadosRaw);\n  }\n\n  #normalizarFeriados(raw) {\n    const lista = [];\n    if (Array.isArray(raw) && raw.length > 0) {\n      for (const item of raw) {\n        if (typeof item === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(item)) {\n          lista.push(item);\n        } else if (item && typeof item === 'object' && item.date && /^\\d{4}-\\d{2}-\\d{2}$/.test(item.date)) {\n          lista.push(item.date);\n        }\n      }\n    }\n\n    // Error 2: Si la API de feriados cayó o vino vacía, activar contingencia\n    if (lista.length === 0) {\n      this.modoContingenciaSinAPI = true;\n      return new Set(CalendarioLaboral.FERIADOS_BASE_CR_2026);\n    }\n\n    this.modoContingenciaSinAPI = false;\n    return new Set(lista);\n  }\n\n  parsearFechaSegura(fecha) {\n    if (fecha instanceof Date && !isNaN(fecha.getTime())) {\n      return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 12, 0, 0);\n    }\n    if (typeof fecha === 'string') {\n      const match = fecha.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n      if (match) {\n        const [, a, m, d] = match.map(Number);\n        return new Date(a, m - 1, d, 12, 0, 0);\n      }\n    }\n    throw new Error(`Formato de fecha inválido: \"${fecha}\"`);\n  }\n\n  formatearFechaISO(fecha) {\n    const d = this.parsearFechaSegura(fecha);\n    const a = d.getFullYear();\n    const m = String(d.getMonth() + 1).padStart(2, '0');\n    const dia = String(d.getDate()).padStart(2, '0');\n    return `${a}-${m}-${dia}`;\n  }\n\n  esFinDeSemana(fecha) {\n    const dia = this.parsearFechaSegura(fecha).getDay();\n    return dia === 0 || dia === 6; // 0=Domingo, 6=Sábado\n  }\n\n  esFeriado(fecha) {\n    return this.feriados.has(this.formatearFechaISO(fecha));\n  }\n\n  esDiaHabil(fecha) {\n    return !this.esFinDeSemana(fecha) && !this.esFeriado(fecha);\n  }\n\n  sumarDiasHabiles(fechaInicio, diasHabiles) {\n    const plazo = Number(diasHabiles);\n    if (isNaN(plazo) || plazo <= 0) {\n      throw new Error(`Plazo de días hábiles inválido: ${diasHabiles}`);\n    }\n\n    const cursor = this.parsearFechaSegura(fechaInicio);\n    let contados = 0;\n\n    // RN1: El conteo empieza el día siguiente y salta fines de semana y feriados\n    while (contados < plazo) {\n      cursor.setDate(cursor.getDate() + 1);\n      if (this.esDiaHabil(cursor)) {\n        contados++;\n      }\n    }\n\n    return this.formatearFechaISO(cursor);\n  }\n\n  contarDiasHabilesEntre(fechaInicio, fechaFin) {\n    const f1 = this.parsearFechaSegura(fechaInicio).getTime();\n    const f2 = this.parsearFechaSegura(fechaFin).getTime();\n\n    if (f1 === f2) return 0;\n\n    if (f1 < f2) {\n      let dias = 0;\n      const cur = new Date(f1);\n      while (cur.getTime() < f2) {\n        cur.setDate(cur.getDate() + 1);\n        if (this.esDiaHabil(cur)) dias++;\n      }\n      return dias;\n    }\n\n    let atraso = 0;\n    const cur = new Date(f2);\n    while (cur.getTime() < f1) {\n      cur.setDate(cur.getDate() + 1);\n      if (this.esDiaHabil(cur)) atraso++;\n    }\n    return -atraso;\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 2: Factura (POO pura)\n// ----------------------------------------------------------------------------\nclass Factura {\n  constructor(datos = {}) {\n    this.id = datos.id ?? null;\n    this.cliente = datos.cliente ? String(datos.cliente).trim() : '';\n    this.monto = typeof datos.monto === 'number' ? datos.monto : (datos.monto ? Number(datos.monto) : 0);\n    this.fechaEmision = datos.fechaEmision ? String(datos.fechaEmision).trim() : '';\n    this.tipoCliente = datos.tipoCliente ? String(datos.tipoCliente).trim().toLowerCase() : 'regular';\n    this.estado = datos.estado ? String(datos.estado).trim().toLowerCase() : 'pendiente';\n\n    // RN2: Plazo según tipo de cliente (VIP recibe 20 días si no se especificó; regular 15)\n    const plazo = datos.plazoDiasHabiles;\n    if (plazo === undefined || plazo === null || plazo === '') {\n      this.plazoDiasHabiles = this.tipoCliente === 'vip' ? 20 : 15;\n    } else {\n      this.plazoDiasHabiles = Number(plazo);\n    }\n\n    this.fechaVencimiento = null;\n    this.diasHabilesRestantes = null;\n    this.recargoMora = 0;\n    this.montoTotalConMora = this.monto;\n    this.alertaPrioridad = 'NORMAL';\n\n    this.errorValidacion = false;\n    this.motivoError = null;\n\n    this.validarDatos();\n  }\n\n  validarDatos() {\n    const errores = [];\n\n    if (!this.id) errores.push('El campo \"id\" es obligatorio');\n    if (!this.cliente) errores.push('El campo \"cliente\" es obligatorio');\n    if (typeof this.monto !== 'number' || isNaN(this.monto) || this.monto <= 0) {\n      errores.push(`Monto inválido (${this.monto}): debe ser un número positivo mayor a 0`);\n    }\n\n    if (!this.fechaEmision || !/^\\d{4}-\\d{2}-\\d{2}$/.test(this.fechaEmision)) {\n      errores.push(`Fecha de emisión inválida: \"${this.fechaEmision}\" (requerido YYYY-MM-DD)`);\n    } else {\n      const [y, m, d] = this.fechaEmision.split('-').map(Number);\n      const testDate = new Date(y, m - 1, d);\n      if (testDate.getFullYear() !== y || testDate.getMonth() !== m - 1 || testDate.getDate() !== d) {\n        errores.push(`Fecha de emisión no existe en el calendario: \"${this.fechaEmision}\"`);\n      }\n    }\n\n    if (typeof this.plazoDiasHabiles !== 'number' || isNaN(this.plazoDiasHabiles) || this.plazoDiasHabiles <= 0) {\n      errores.push(`Plazo inválido: debe ser mayor a 0`);\n    }\n\n    if (errores.length > 0) {\n      this.errorValidacion = true;\n      this.motivoError = errores.join('; ');\n      return false;\n    }\n\n    this.errorValidacion = false;\n    this.motivoError = null;\n    return true;\n  }\n\n  calcularFechaVencimiento(calendario) {\n    if (this.errorValidacion) return null;\n    this.fechaVencimiento = calendario.sumarDiasHabiles(this.fechaEmision, this.plazoDiasHabiles);\n    return this.fechaVencimiento;\n  }\n\n  calcularDiasRestantes(calendario, fechaActual = new Date()) {\n    if (this.errorValidacion) return null;\n    if (!this.fechaVencimiento) this.calcularFechaVencimiento(calendario);\n    const ref = calendario.formatearFechaISO(fechaActual);\n    this.diasHabilesRestantes = calendario.contarDiasHabilesEntre(ref, this.fechaVencimiento);\n    return this.diasHabilesRestantes;\n  }\n\n  evaluarEstado(calendario, fechaActual = new Date()) {\n    if (!this.validarDatos()) return this;\n\n    this.calcularFechaVencimiento(calendario);\n    const diasRestantes = this.calcularDiasRestantes(calendario, fechaActual);\n    const fechaRefISO = calendario.formatearFechaISO(fechaActual);\n\n    // RN3: Si fechaActual > fechaVencimiento y sigue pendiente -> \"vencida\"\n    const estaVencida = fechaRefISO > this.fechaVencimiento;\n    if (estaVencida && this.estado === 'pendiente') {\n      this.estado = 'vencida';\n    }\n\n    // RN4: Cálculo de recargo por mora\n    if (this.estado === 'vencida') {\n      const tasa = this.tipoCliente === 'vip' ? 0.02 : 0.05;\n      this.recargoMora = Math.round(this.monto * tasa * 100) / 100;\n      this.montoTotalConMora = Math.round((this.monto + this.recargoMora) * 100) / 100;\n      this.alertaPrioridad = 'VENCIDA - Cobro inmediato';\n    } else {\n      this.recargoMora = 0;\n      this.montoTotalConMora = this.monto;\n\n      // RN5: Alerta si restan 3 días hábiles o menos\n      if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 3) {\n        this.alertaPrioridad = 'ALTA - Próxima a vencer';\n      } else {\n        this.alertaPrioridad = 'NORMAL';\n      }\n    }\n\n    return this;\n  }\n\n  toJSON() {\n    return {\n      id: this.id,\n      cliente: this.cliente,\n      tipoCliente: this.tipoCliente,\n      monto: this.monto,\n      fechaEmision: this.fechaEmision,\n      plazoDiasHabiles: this.plazoDiasHabiles,\n      fechaVencimiento: this.fechaVencimiento,\n      diasHabilesRestantes: this.diasHabilesRestantes,\n      estado: this.estado,\n      recargoMora: this.recargoMora,\n      montoTotalConMora: this.montoTotalConMora,\n      alertaPrioridad: this.alertaPrioridad,\n      errorValidacion: this.errorValidacion,\n      motivoError: this.motivoError\n    };\n  }\n}\n\n// ============================================================================\n// ORQUESTACIÓN EN n8n\n// ============================================================================\n\nconst todosLosItems = $input.all().map(item => item.json);\n\n// 1. Separar facturas de feriados recibidos por el Merge o llamadas previas\nlet feriadosRaw = [];\nlet facturasRaw = [];\n\n// Intento por nodo origen si n8n tiene acceso a los nodos nombrados\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoFeriados = $('Consultar Feriados CR API');\n    if (nodoFeriados && typeof nodoFeriados.all === 'function') {\n      feriadosRaw = nodoFeriados.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\n\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoFacturas = $('Obtener Facturas Pendientes');\n    if (nodoFacturas && typeof nodoFacturas.all === 'function') {\n      facturasRaw = nodoFacturas.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\n\n// Fallback robusto: clasificar desde $input.all() si vinieron unificados\nif (facturasRaw.length === 0) {\n  facturasRaw = todosLosItems.filter(item => item && item.id && (item.monto !== undefined || item.cliente !== undefined));\n}\nif (feriadosRaw.length === 0) {\n  feriadosRaw = todosLosItems.filter(item => item && item.date && (item.localName !== undefined || item.name !== undefined));\n}\n\n// 2. Instanciar CalendarioLaboral (activa contingencia automáticamente si la API falló)\nconst calendario = new CalendarioLaboral({\n  anio: 2026,\n  pais: 'CR',\n  feriadosRaw\n});\n\n// 3. Fecha del sistema para evaluación\nconst fechaActual = new Date();\n\n// 4. Procesar cada factura con POO y capturar errores individuales sin romper el lote\nconst facturasFinales = [];\n\nfor (const datos of facturasRaw) {\n  try {\n    const factura = new Factura(datos);\n\n    if (!factura.errorValidacion) {\n      factura.evaluarEstado(calendario, fechaActual);\n    }\n\n    const payload = factura.toJSON();\n    payload.modoContingenciaSinAPI = calendario.modoContingenciaSinAPI;\n    facturasFinales.push(payload);\n  } catch (err) {\n    facturasFinales.push({\n      id: datos?.id ?? 'DESCONOCIDO',\n      cliente: datos?.cliente ?? 'DESCONOCIDO',\n      monto: datos?.monto ?? 0,\n      fechaEmision: datos?.fechaEmision ?? '',\n      estado: datos?.estado ?? 'rechazada',\n      errorValidacion: true,\n      motivoError: `Excepción no controlada: ${err.message}`,\n      modoContingenciaSinAPI: calendario.modoContingenciaSinAPI\n    });\n  }\n}\n\n// Contrato de salida n8n: Arreglo de objetos { json: {...} }\nreturn facturasFinales.map(f => ({ json: f }));\n"
+      },
+      "id": "node-code-procesar",
+      "name": "Procesar Facturas y Calendario (POO)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valida",
+              "leftValue": "={{ $json.errorValidacion }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-if-valida",
+      "name": "Factura Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://localhost:3000/facturas/{{ $json.id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"estado\": \"{{ $json.estado }}\",\n  \"fechaVencimiento\": \"{{ $json.fechaVencimiento }}\",\n  \"diasHabilesRestantes\": {{ $json.diasHabilesRestantes }},\n  \"recargoMora\": {{ $json.recargoMora }},\n  \"montoTotalConMora\": {{ $json.montoTotalConMora }},\n  \"alertaPrioridad\": \"{{ $json.alertaPrioridad }}\"\n}",
+        "options": {}
+      },
+      "id": "node-http-actualizar",
+      "name": "Actualizar Factura JSON Server",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ============================================================================\n// NODO n8n: Code - Registro y Auditoría de Facturas Rechazadas (Error 1)\n// MODO: Run Once for All Items\n// DESCRIPCIÓN: Consolida y formatea las facturas que no superaron la validación\n// de integridad (Error 1: montos <= 0, fechas corruptas, etc.) sin detener el flujo.\n// ============================================================================\n\nconst facturasRechazadas = $input.all().map(i => i.json);\n\nconst informeAuditoria = facturasRechazadas.map(fac => ({\n  id: fac.id || 'DESCONOCIDO',\n  cliente: fac.cliente || '(Sin cliente)',\n  monto: fac.monto,\n  fechaEmision: fac.fechaEmision,\n  estadoRegistro: 'RECHAZADA_POR_INTEGRIDAD',\n  accionTomada: 'No se actualizó en JSON Server para proteger la base de datos',\n  errorValidacion: true,\n  motivoError: fac.motivoError || 'Fallo de validación de integridad de datos',\n  timestampAuditoria: new Date().toISOString()\n}));\n\nreturn informeAuditoria.map(item => ({ json: item }));\n"
+      },
+      "id": "node-code-rechazadas",
+      "name": "Registro Auditoría Errores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Consultar Feriados CR API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Obtener Facturas Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (08:00 AM)": {
+      "main": [
+        [
+          {
+            "node": "Consultar Feriados CR API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Obtener Facturas Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Feriados CR API": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar Entradas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Facturas Pendientes": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar Entradas",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Sincronizar Entradas": {
+      "main": [
+        [
+          {
+            "node": "Procesar Facturas y Calendario (POO)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Facturas y Calendario (POO)": {
+      "main": [
+        [
+          {
+            "node": "Factura Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Factura Válida?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Factura JSON Server",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registro Auditoría Errores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
