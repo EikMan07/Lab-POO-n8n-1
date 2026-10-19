@@ -1,5 +1,5 @@
 {
-  "name": "Laboratorio 1 - Central de Facturación con Días Hábiles (POO)",
+  "name": "Laboratorio 1 Extendido - Facturación Días Hábiles, Multimoneda y Tendencias (POO)",
   "nodes": [
     {
       "parameters": {},
@@ -8,8 +8,8 @@
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        180,
-        220
+        100,
+        240
       ]
     },
     {
@@ -28,8 +28,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        180,
-        420
+        100,
+        460
       ]
     },
     {
@@ -43,8 +43,25 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        460,
-        220
+        380,
+        160
+      ],
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://open.er-api.com/v6/latest/USD",
+        "options": {}
+      },
+      "id": "node-http-tipo-cambio",
+      "name": "Consultar Tipo de Cambio USD API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        380,
+        320
       ],
       "onError": "continueRegularOutput",
       "continueOnFail": true
@@ -60,36 +77,54 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        460,
-        420
+        380,
+        480
       ]
     },
     {
       "parameters": {
-        "mode": "append"
+        "method": "GET",
+        "url": "http://localhost:3000/historial_ejecuciones",
+        "options": {}
       },
-      "id": "node-merge-inputs",
-      "name": "Sincronizar Entradas",
+      "id": "node-http-historial",
+      "name": "Obtener Historial Ejecuciones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        380,
+        640
+      ],
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 4
+      },
+      "id": "node-merge-fuentes",
+      "name": "Sincronizar Fuentes (Merge)",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        720,
-        320
+        680,
+        400
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// ============================================================================\n// NODO n8n: Code - Procesar Facturas y Calendario Laboral (POO)\n// MODO: Run Once for All Items\n// DESCRIPCIÓN: Implementación en JavaScript ES6+ puro (POO) del Calendario\n// Laboral para Costa Rica y la entidad Factura con las 5 Reglas de Negocio\n// y manejo defensivo de fallos de red / datos corruptos.\n// ============================================================================\n\n// ----------------------------------------------------------------------------\n// CLASE 1: CalendarioLaboral (POO pura)\n// ----------------------------------------------------------------------------\nclass CalendarioLaboral {\n  static FERIADOS_BASE_CR_2026 = [\n    '2026-01-01', // Año Nuevo\n    '2026-04-02', // Jueves Santo\n    '2026-04-03', // Viernes Santo\n    '2026-04-11', // Día de Juan Santamaría\n    '2026-05-01', // Día Internacional del Trabajo\n    '2026-07-25', // Anexión del Partido de Nicoya\n    '2026-08-02', // Fiesta de Nuestra Señora de los Ángeles\n    '2026-08-15', // Día de la Madre\n    '2026-09-15', // Día de la Independencia\n    '2026-12-01', // Día de la Abolición del Ejército\n    '2026-12-25'  // Navidad\n  ];\n\n  constructor({ anio = 2026, pais = 'CR', feriadosRaw = [] } = {}) {\n    this.anio = Number(anio) || 2026;\n    this.pais = String(pais || 'CR').toUpperCase();\n    this.modoContingenciaSinAPI = false;\n    this.feriados = this.#normalizarFeriados(feriadosRaw);\n  }\n\n  #normalizarFeriados(raw) {\n    const lista = [];\n    if (Array.isArray(raw) && raw.length > 0) {\n      for (const item of raw) {\n        if (typeof item === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(item)) {\n          lista.push(item);\n        } else if (item && typeof item === 'object' && item.date && /^\\d{4}-\\d{2}-\\d{2}$/.test(item.date)) {\n          lista.push(item.date);\n        }\n      }\n    }\n\n    // Error 2: Si la API de feriados cayó o vino vacía, activar contingencia\n    if (lista.length === 0) {\n      this.modoContingenciaSinAPI = true;\n      return new Set(CalendarioLaboral.FERIADOS_BASE_CR_2026);\n    }\n\n    this.modoContingenciaSinAPI = false;\n    return new Set(lista);\n  }\n\n  parsearFechaSegura(fecha) {\n    if (fecha instanceof Date && !isNaN(fecha.getTime())) {\n      return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 12, 0, 0);\n    }\n    if (typeof fecha === 'string') {\n      const match = fecha.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n      if (match) {\n        const [, a, m, d] = match.map(Number);\n        return new Date(a, m - 1, d, 12, 0, 0);\n      }\n    }\n    throw new Error(`Formato de fecha inválido: \"${fecha}\"`);\n  }\n\n  formatearFechaISO(fecha) {\n    const d = this.parsearFechaSegura(fecha);\n    const a = d.getFullYear();\n    const m = String(d.getMonth() + 1).padStart(2, '0');\n    const dia = String(d.getDate()).padStart(2, '0');\n    return `${a}-${m}-${dia}`;\n  }\n\n  esFinDeSemana(fecha) {\n    const dia = this.parsearFechaSegura(fecha).getDay();\n    return dia === 0 || dia === 6; // 0=Domingo, 6=Sábado\n  }\n\n  esFeriado(fecha) {\n    return this.feriados.has(this.formatearFechaISO(fecha));\n  }\n\n  esDiaHabil(fecha) {\n    return !this.esFinDeSemana(fecha) && !this.esFeriado(fecha);\n  }\n\n  sumarDiasHabiles(fechaInicio, diasHabiles) {\n    const plazo = Number(diasHabiles);\n    if (isNaN(plazo) || plazo <= 0) {\n      throw new Error(`Plazo de días hábiles inválido: ${diasHabiles}`);\n    }\n\n    const cursor = this.parsearFechaSegura(fechaInicio);\n    let contados = 0;\n\n    // RN1: El conteo empieza el día siguiente y salta fines de semana y feriados\n    while (contados < plazo) {\n      cursor.setDate(cursor.getDate() + 1);\n      if (this.esDiaHabil(cursor)) {\n        contados++;\n      }\n    }\n\n    return this.formatearFechaISO(cursor);\n  }\n\n  contarDiasHabilesEntre(fechaInicio, fechaFin) {\n    const f1 = this.parsearFechaSegura(fechaInicio).getTime();\n    const f2 = this.parsearFechaSegura(fechaFin).getTime();\n\n    if (f1 === f2) return 0;\n\n    if (f1 < f2) {\n      let dias = 0;\n      const cur = new Date(f1);\n      while (cur.getTime() < f2) {\n        cur.setDate(cur.getDate() + 1);\n        if (this.esDiaHabil(cur)) dias++;\n      }\n      return dias;\n    }\n\n    let atraso = 0;\n    const cur = new Date(f2);\n    while (cur.getTime() < f1) {\n      cur.setDate(cur.getDate() + 1);\n      if (this.esDiaHabil(cur)) atraso++;\n    }\n    return -atraso;\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 2: Factura (POO pura)\n// ----------------------------------------------------------------------------\nclass Factura {\n  constructor(datos = {}) {\n    this.id = datos.id ?? null;\n    this.cliente = datos.cliente ? String(datos.cliente).trim() : '';\n    this.monto = typeof datos.monto === 'number' ? datos.monto : (datos.monto ? Number(datos.monto) : 0);\n    this.fechaEmision = datos.fechaEmision ? String(datos.fechaEmision).trim() : '';\n    this.tipoCliente = datos.tipoCliente ? String(datos.tipoCliente).trim().toLowerCase() : 'regular';\n    this.estado = datos.estado ? String(datos.estado).trim().toLowerCase() : 'pendiente';\n\n    // RN2: Plazo según tipo de cliente (VIP recibe 20 días si no se especificó; regular 15)\n    const plazo = datos.plazoDiasHabiles;\n    if (plazo === undefined || plazo === null || plazo === '') {\n      this.plazoDiasHabiles = this.tipoCliente === 'vip' ? 20 : 15;\n    } else {\n      this.plazoDiasHabiles = Number(plazo);\n    }\n\n    this.fechaVencimiento = null;\n    this.diasHabilesRestantes = null;\n    this.recargoMora = 0;\n    this.montoTotalConMora = this.monto;\n    this.alertaPrioridad = 'NORMAL';\n\n    this.errorValidacion = false;\n    this.motivoError = null;\n\n    this.validarDatos();\n  }\n\n  validarDatos() {\n    const errores = [];\n\n    if (!this.id) errores.push('El campo \"id\" es obligatorio');\n    if (!this.cliente) errores.push('El campo \"cliente\" es obligatorio');\n    if (typeof this.monto !== 'number' || isNaN(this.monto) || this.monto <= 0) {\n      errores.push(`Monto inválido (${this.monto}): debe ser un número positivo mayor a 0`);\n    }\n\n    if (!this.fechaEmision || !/^\\d{4}-\\d{2}-\\d{2}$/.test(this.fechaEmision)) {\n      errores.push(`Fecha de emisión inválida: \"${this.fechaEmision}\" (requerido YYYY-MM-DD)`);\n    } else {\n      const [y, m, d] = this.fechaEmision.split('-').map(Number);\n      const testDate = new Date(y, m - 1, d);\n      if (testDate.getFullYear() !== y || testDate.getMonth() !== m - 1 || testDate.getDate() !== d) {\n        errores.push(`Fecha de emisión no existe en el calendario: \"${this.fechaEmision}\"`);\n      }\n    }\n\n    if (typeof this.plazoDiasHabiles !== 'number' || isNaN(this.plazoDiasHabiles) || this.plazoDiasHabiles <= 0) {\n      errores.push(`Plazo inválido: debe ser mayor a 0`);\n    }\n\n    if (errores.length > 0) {\n      this.errorValidacion = true;\n      this.motivoError = errores.join('; ');\n      return false;\n    }\n\n    this.errorValidacion = false;\n    this.motivoError = null;\n    return true;\n  }\n\n  calcularFechaVencimiento(calendario) {\n    if (this.errorValidacion) return null;\n    this.fechaVencimiento = calendario.sumarDiasHabiles(this.fechaEmision, this.plazoDiasHabiles);\n    return this.fechaVencimiento;\n  }\n\n  calcularDiasRestantes(calendario, fechaActual = new Date()) {\n    if (this.errorValidacion) return null;\n    if (!this.fechaVencimiento) this.calcularFechaVencimiento(calendario);\n    const ref = calendario.formatearFechaISO(fechaActual);\n    this.diasHabilesRestantes = calendario.contarDiasHabilesEntre(ref, this.fechaVencimiento);\n    return this.diasHabilesRestantes;\n  }\n\n  evaluarEstado(calendario, fechaActual = new Date()) {\n    if (!this.validarDatos()) return this;\n\n    this.calcularFechaVencimiento(calendario);\n    const diasRestantes = this.calcularDiasRestantes(calendario, fechaActual);\n    const fechaRefISO = calendario.formatearFechaISO(fechaActual);\n\n    // RN3: Si fechaActual > fechaVencimiento y sigue pendiente -> \"vencida\"\n    const estaVencida = fechaRefISO > this.fechaVencimiento;\n    if (estaVencida && this.estado === 'pendiente') {\n      this.estado = 'vencida';\n    }\n\n    // RN4: Cálculo de recargo por mora\n    if (this.estado === 'vencida') {\n      const tasa = this.tipoCliente === 'vip' ? 0.02 : 0.05;\n      this.recargoMora = Math.round(this.monto * tasa * 100) / 100;\n      this.montoTotalConMora = Math.round((this.monto + this.recargoMora) * 100) / 100;\n      this.alertaPrioridad = 'VENCIDA - Cobro inmediato';\n    } else {\n      this.recargoMora = 0;\n      this.montoTotalConMora = this.monto;\n\n      // RN5: Alerta si restan 3 días hábiles o menos\n      if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 3) {\n        this.alertaPrioridad = 'ALTA - Próxima a vencer';\n      } else {\n        this.alertaPrioridad = 'NORMAL';\n      }\n    }\n\n    return this;\n  }\n\n  toJSON() {\n    return {\n      id: this.id,\n      cliente: this.cliente,\n      tipoCliente: this.tipoCliente,\n      monto: this.monto,\n      fechaEmision: this.fechaEmision,\n      plazoDiasHabiles: this.plazoDiasHabiles,\n      fechaVencimiento: this.fechaVencimiento,\n      diasHabilesRestantes: this.diasHabilesRestantes,\n      estado: this.estado,\n      recargoMora: this.recargoMora,\n      montoTotalConMora: this.montoTotalConMora,\n      alertaPrioridad: this.alertaPrioridad,\n      errorValidacion: this.errorValidacion,\n      motivoError: this.motivoError\n    };\n  }\n}\n\n// ============================================================================\n// ORQUESTACIÓN EN n8n\n// ============================================================================\n\nconst todosLosItems = $input.all().map(item => item.json);\n\n// 1. Separar facturas de feriados recibidos por el Merge o llamadas previas\nlet feriadosRaw = [];\nlet facturasRaw = [];\n\n// Intento por nodo origen si n8n tiene acceso a los nodos nombrados\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoFeriados = $('Consultar Feriados CR API');\n    if (nodoFeriados && typeof nodoFeriados.all === 'function') {\n      feriadosRaw = nodoFeriados.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\n\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoFacturas = $('Obtener Facturas Pendientes');\n    if (nodoFacturas && typeof nodoFacturas.all === 'function') {\n      facturasRaw = nodoFacturas.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\n\n// Fallback robusto: clasificar desde $input.all() si vinieron unificados\nif (facturasRaw.length === 0) {\n  facturasRaw = todosLosItems.filter(item => item && item.id && (item.monto !== undefined || item.cliente !== undefined));\n}\nif (feriadosRaw.length === 0) {\n  feriadosRaw = todosLosItems.filter(item => item && item.date && (item.localName !== undefined || item.name !== undefined));\n}\n\n// 2. Instanciar CalendarioLaboral (activa contingencia automáticamente si la API falló)\nconst calendario = new CalendarioLaboral({\n  anio: 2026,\n  pais: 'CR',\n  feriadosRaw\n});\n\n// 3. Fecha del sistema para evaluación\nconst fechaActual = new Date();\n\n// 4. Procesar cada factura con POO y capturar errores individuales sin romper el lote\nconst facturasFinales = [];\n\nfor (const datos of facturasRaw) {\n  try {\n    const factura = new Factura(datos);\n\n    if (!factura.errorValidacion) {\n      factura.evaluarEstado(calendario, fechaActual);\n    }\n\n    const payload = factura.toJSON();\n    payload.modoContingenciaSinAPI = calendario.modoContingenciaSinAPI;\n    facturasFinales.push(payload);\n  } catch (err) {\n    facturasFinales.push({\n      id: datos?.id ?? 'DESCONOCIDO',\n      cliente: datos?.cliente ?? 'DESCONOCIDO',\n      monto: datos?.monto ?? 0,\n      fechaEmision: datos?.fechaEmision ?? '',\n      estado: datos?.estado ?? 'rechazada',\n      errorValidacion: true,\n      motivoError: `Excepción no controlada: ${err.message}`,\n      modoContingenciaSinAPI: calendario.modoContingenciaSinAPI\n    });\n  }\n}\n\n// Contrato de salida n8n: Arreglo de objetos { json: {...} }\nreturn facturasFinales.map(f => ({ json: f }));\n"
+        "jsCode": "// ============================================================================\n// NODO n8n: Code - Procesar Facturas, Multimoneda y Tendencia (POO Extendido)\n// MODO: Run Once for All Items\n// DESCRIPCIÓN: Implementación en JavaScript ES6+ puro (POO) con:\n// - CalendarioLaboral (Costa Rica 2026 + Contingencia)\n// - Jerarquía con Herencia y Polimorfismo (FacturaNacional y FacturaInternacional)\n// - Patrón Factory (FacturaFactory)\n// - Conversión cambiaria dinámica (USD -> CRC vía API externa)\n// - Análisis de Historial y Tendencia Financiera (HistorialTendencia)\n// ============================================================================\n\n// ----------------------------------------------------------------------------\n// CLASE 1: CalendarioLaboral (POO pura)\n// ----------------------------------------------------------------------------\nclass CalendarioLaboral {\n  static FERIADOS_BASE_CR_2026 = [\n    '2026-01-01', // Año Nuevo\n    '2026-04-02', // Jueves Santo\n    '2026-04-03', // Viernes Santo\n    '2026-04-11', // Día de Juan Santamaría\n    '2026-05-01', // Día Internacional del Trabajo\n    '2026-07-25', // Anexión del Partido de Nicoya\n    '2026-08-02', // Fiesta de Nuestra Señora de los Ángeles\n    '2026-08-15', // Día de la Madre\n    '2026-09-15', // Día de la Independencia\n    '2026-12-01', // Día de la Abolición del Ejército\n    '2026-12-25'  // Navidad\n  ];\n\n  constructor({ anio = 2026, pais = 'CR', feriadosRaw = [] } = {}) {\n    this.anio = Number(anio) || 2026;\n    this.pais = String(pais || 'CR').toUpperCase();\n    this.modoContingenciaSinAPI = false;\n    this.feriados = this.#normalizarFeriados(feriadosRaw);\n  }\n\n  #normalizarFeriados(raw) {\n    const lista = [];\n    if (Array.isArray(raw) && raw.length > 0) {\n      for (const item of raw) {\n        if (typeof item === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(item)) {\n          lista.push(item);\n        } else if (item && typeof item === 'object' && item.date && /^\\d{4}-\\d{2}-\\d{2}$/.test(item.date)) {\n          lista.push(item.date);\n        }\n      }\n    }\n\n    if (lista.length === 0) {\n      this.modoContingenciaSinAPI = true;\n      return new Set(CalendarioLaboral.FERIADOS_BASE_CR_2026);\n    }\n\n    this.modoContingenciaSinAPI = false;\n    return new Set(lista);\n  }\n\n  parsearFechaSegura(fecha) {\n    if (fecha instanceof Date && !isNaN(fecha.getTime())) {\n      return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 12, 0, 0);\n    }\n    if (typeof fecha === 'string') {\n      const match = fecha.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n      if (match) {\n        const [, a, m, d] = match.map(Number);\n        return new Date(a, m - 1, d, 12, 0, 0);\n      }\n    }\n    throw new Error(`Formato de fecha inválido: \"${fecha}\"`);\n  }\n\n  formatearFechaISO(fecha) {\n    const d = this.parsearFechaSegura(fecha);\n    const a = d.getFullYear();\n    const m = String(d.getMonth() + 1).padStart(2, '0');\n    const dia = String(d.getDate()).padStart(2, '0');\n    return `${a}-${m}-${dia}`;\n  }\n\n  esFinDeSemana(fecha) {\n    const dia = this.parsearFechaSegura(fecha).getDay();\n    return dia === 0 || dia === 6;\n  }\n\n  esFeriado(fecha) {\n    return this.feriados.has(this.formatearFechaISO(fecha));\n  }\n\n  esDiaHabil(fecha) {\n    return !this.esFinDeSemana(fecha) && !this.esFeriado(fecha);\n  }\n\n  sumarDiasHabiles(fechaInicio, diasHabiles) {\n    const plazo = Number(diasHabiles);\n    if (isNaN(plazo) || plazo <= 0) {\n      throw new Error(`Plazo de días hábiles inválido: ${diasHabiles}`);\n    }\n\n    const cursor = this.parsearFechaSegura(fechaInicio);\n    let contados = 0;\n\n    while (contados < plazo) {\n      cursor.setDate(cursor.getDate() + 1);\n      if (this.esDiaHabil(cursor)) {\n        contados++;\n      }\n    }\n\n    return this.formatearFechaISO(cursor);\n  }\n\n  contarDiasHabilesEntre(fechaInicio, fechaFin) {\n    const f1 = this.parsearFechaSegura(fechaInicio).getTime();\n    const f2 = this.parsearFechaSegura(fechaFin).getTime();\n\n    if (f1 === f2) return 0;\n\n    if (f1 < f2) {\n      let dias = 0;\n      const cur = new Date(f1);\n      while (cur.getTime() < f2) {\n        cur.setDate(cur.getDate() + 1);\n        if (this.esDiaHabil(cur)) dias++;\n      }\n      return dias;\n    }\n\n    let atraso = 0;\n    const cur = new Date(f2);\n    while (cur.getTime() < f1) {\n      cur.setDate(cur.getDate() + 1);\n      if (this.esDiaHabil(cur)) atraso++;\n    }\n    return -atraso;\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 2: Factura (Clase Base)\n// ----------------------------------------------------------------------------\nclass Factura {\n  constructor(datos = {}) {\n    this.id = datos.id ?? null;\n    this.cliente = datos.cliente ? String(datos.cliente).trim() : '';\n    this.monto = typeof datos.monto === 'number' ? datos.monto : (datos.monto ? Number(datos.monto) : 0);\n    this.fechaEmision = datos.fechaEmision ? String(datos.fechaEmision).trim() : '';\n    this.tipoCliente = datos.tipoCliente ? String(datos.tipoCliente).trim().toLowerCase() : 'regular';\n    this.estado = datos.estado ? String(datos.estado).trim().toLowerCase() : 'pendiente';\n    this.categoria = datos.categoria ? String(datos.categoria).trim().toLowerCase() : 'nacional';\n    this.moneda = datos.moneda ? String(datos.moneda).trim().toUpperCase() : 'CRC';\n    this.tipoFactura = 'General';\n\n    const plazo = datos.plazoDiasHabiles;\n    if (plazo === undefined || plazo === null || plazo === '') {\n      this.plazoDiasHabiles = this.tipoCliente === 'vip' ? 20 : 15;\n    } else {\n      this.plazoDiasHabiles = Number(plazo);\n    }\n\n    this.fechaVencimiento = null;\n    this.diasHabilesRestantes = null;\n    this.recargoMora = 0;\n    this.montoTotalConMora = this.monto;\n    this.alertaPrioridad = 'NORMAL';\n\n    this.errorValidacion = false;\n    this.motivoError = null;\n\n    this.validarDatos();\n  }\n\n  validarDatos() {\n    const errores = [];\n    if (!this.id) errores.push('El campo \"id\" es obligatorio');\n    if (!this.cliente) errores.push('El campo \"cliente\" es obligatorio');\n    if (typeof this.monto !== 'number' || isNaN(this.monto) || this.monto <= 0) {\n      errores.push(`Monto inválido (${this.monto}): debe ser un número positivo mayor a 0`);\n    }\n\n    if (!this.fechaEmision || !/^\\d{4}-\\d{2}-\\d{2}$/.test(this.fechaEmision)) {\n      errores.push(`Fecha de emisión inválida: \"${this.fechaEmision}\" (formato requerido: YYYY-MM-DD)`);\n    } else {\n      const [y, m, d] = this.fechaEmision.split('-').map(Number);\n      const testDate = new Date(y, m - 1, d);\n      if (testDate.getFullYear() !== y || testDate.getMonth() !== m - 1 || testDate.getDate() !== d) {\n        errores.push(`Fecha de emisión no existe en el calendario: \"${this.fechaEmision}\"`);\n      }\n    }\n\n    if (typeof this.plazoDiasHabiles !== 'number' || isNaN(this.plazoDiasHabiles) || this.plazoDiasHabiles <= 0) {\n      errores.push(`Plazo de días hábiles inválido: debe ser mayor a 0`);\n    }\n\n    if (errores.length > 0) {\n      this.errorValidacion = true;\n      this.motivoError = errores.join('; ');\n      return false;\n    }\n\n    this.errorValidacion = false;\n    this.motivoError = null;\n    return true;\n  }\n\n  calcularFechaVencimiento(calendario) {\n    if (this.errorValidacion) return null;\n    this.fechaVencimiento = calendario.sumarDiasHabiles(this.fechaEmision, this.plazoDiasHabiles);\n    return this.fechaVencimiento;\n  }\n\n  calcularDiasRestantes(calendario, fechaActual = new Date()) {\n    if (this.errorValidacion) return null;\n    if (!this.fechaVencimiento) this.calcularFechaVencimiento(calendario);\n    const ref = calendario.formatearFechaISO(fechaActual);\n    this.diasHabilesRestantes = calendario.contarDiasHabilesEntre(ref, this.fechaVencimiento);\n    return this.diasHabilesRestantes;\n  }\n\n  evaluarEstado(calendario, fechaActual = new Date(), opciones = {}) {\n    if (!this.validarDatos()) return this;\n\n    this.calcularFechaVencimiento(calendario);\n    const diasRestantes = this.calcularDiasRestantes(calendario, fechaActual);\n    const fechaRefISO = calendario.formatearFechaISO(fechaActual);\n\n    const estaVencida = fechaRefISO > this.fechaVencimiento;\n    if (estaVencida && this.estado === 'pendiente') {\n      this.estado = 'vencida';\n    }\n\n    if (this.estado === 'vencida') {\n      const porcentajeMora = this.tipoCliente === 'vip' ? 0.02 : 0.05;\n      this.recargoMora = Math.round(this.monto * porcentajeMora * 100) / 100;\n      this.montoTotalConMora = Math.round((this.monto + this.recargoMora) * 100) / 100;\n      this.alertaPrioridad = 'VENCIDA - Cobro inmediato';\n    } else {\n      this.recargoMora = 0;\n      this.montoTotalConMora = this.monto;\n      if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 3) {\n        this.alertaPrioridad = 'ALTA - Próxima a vencer';\n      } else {\n        this.alertaPrioridad = 'NORMAL';\n      }\n    }\n\n    return this;\n  }\n\n  toJSON() {\n    return {\n      id: this.id,\n      cliente: this.cliente,\n      categoria: this.categoria,\n      moneda: this.moneda,\n      tipoFactura: this.tipoFactura,\n      tipoCliente: this.tipoCliente,\n      monto: this.monto,\n      fechaEmision: this.fechaEmision,\n      plazoDiasHabiles: this.plazoDiasHabiles,\n      fechaVencimiento: this.fechaVencimiento,\n      diasHabilesRestantes: this.diasHabilesRestantes,\n      estado: this.estado,\n      recargoMora: this.recargoMora,\n      montoTotalConMora: this.montoTotalConMora,\n      alertaPrioridad: this.alertaPrioridad,\n      errorValidacion: this.errorValidacion,\n      motivoError: this.motivoError\n    };\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 3: FacturaNacional (Subclase con Herencia)\n// ----------------------------------------------------------------------------\nclass FacturaNacional extends Factura {\n  constructor(datos = {}) {\n    super({\n      ...datos,\n      categoria: 'nacional',\n      moneda: datos.moneda || 'CRC'\n    });\n    this.tipoFactura = 'Nacional (CRC)';\n    this.impuestoLocalPorcentaje = 0.13;\n    this.tipoCambioAplicado = 1;\n    this.montoCRC = this.monto;\n    this.recargoMoraCRC = 0;\n    this.montoTotalConMoraCRC = this.monto;\n  }\n\n  evaluarEstado(calendario, fechaActual = new Date(), opciones = {}) {\n    super.evaluarEstado(calendario, fechaActual, opciones);\n    this.tipoCambioAplicado = 1;\n    this.montoCRC = this.monto;\n    this.recargoMoraCRC = this.recargoMora;\n    this.montoTotalConMoraCRC = this.montoTotalConMora;\n    return this;\n  }\n\n  toJSON() {\n    return {\n      ...super.toJSON(),\n      impuestoLocalPorcentaje: this.impuestoLocalPorcentaje,\n      tipoCambioAplicado: this.tipoCambioAplicado,\n      montoCRC: this.montoCRC,\n      recargoMoraCRC: this.recargoMoraCRC,\n      montoTotalConMoraCRC: this.montoTotalConMoraCRC\n    };\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 4: FacturaInternacional (Subclase con Polimorfismo y Multimoneda)\n// ----------------------------------------------------------------------------\nclass FacturaInternacional extends Factura {\n  constructor(datos = {}) {\n    super({\n      ...datos,\n      categoria: 'internacional',\n      moneda: datos.moneda || 'USD'\n    });\n    this.tipoFactura = 'Internacional (USD)';\n    this.diasTramiteBancario = 3; // Días adicionales trámite SWIFT\n    this.comisionTransferenciaUSD = 25; // Comisión fija bancaria\n    this.tipoCambioAplicado = null;\n    this.montoCRC = null;\n    this.recargoMoraCRC = null;\n    this.montoTotalConMoraCRC = null;\n  }\n\n  evaluarEstado(calendario, fechaActual = new Date(), { tipoCambio = 500 } = {}) {\n    if (!this.validarDatos()) return this;\n\n    // Polimorfismo en plazo: suma días hábiles de trámite bancario\n    const plazoEfectivo = this.plazoDiasHabiles + this.diasTramiteBancario;\n    this.fechaVencimiento = calendario.sumarDiasHabiles(this.fechaEmision, plazoEfectivo);\n\n    const ref = calendario.formatearFechaISO(fechaActual);\n    this.diasHabilesRestantes = calendario.contarDiasHabilesEntre(ref, this.fechaVencimiento);\n\n    const estaVencida = ref > this.fechaVencimiento;\n    if (estaVencida && this.estado === 'pendiente') {\n      this.estado = 'vencida';\n    }\n\n    // Polimorfismo en mora internacional: mora porcentual + comisión fija SWIFT\n    if (this.estado === 'vencida') {\n      const porcentajeMora = this.tipoCliente === 'vip' ? 0.02 : 0.05;\n      const moraPorcentual = this.monto * porcentajeMora;\n      this.recargoMora = Math.round((moraPorcentual + this.comisionTransferenciaUSD) * 100) / 100;\n      this.montoTotalConMora = Math.round((this.monto + this.recargoMora) * 100) / 100;\n      this.alertaPrioridad = 'VENCIDA - Cobro internacional prioritario';\n    } else {\n      this.recargoMora = 0;\n      this.montoTotalConMora = this.monto;\n      if (this.diasHabilesRestantes !== null && this.diasHabilesRestantes >= 0 && this.diasHabilesRestantes <= 3) {\n        this.alertaPrioridad = 'ALTA - Próxima a vencer (Internacional)';\n      } else {\n        this.alertaPrioridad = 'NORMAL';\n      }\n    }\n\n    // Conversión cambiaria polimórfica a Colones (CRC)\n    this.tipoCambioAplicado = Number(tipoCambio) || 500;\n    this.montoCRC = Math.round(this.monto * this.tipoCambioAplicado * 100) / 100;\n    this.recargoMoraCRC = Math.round(this.recargoMora * this.tipoCambioAplicado * 100) / 100;\n    this.montoTotalConMoraCRC = Math.round(this.montoTotalConMora * this.tipoCambioAplicado * 100) / 100;\n\n    return this;\n  }\n\n  toJSON() {\n    return {\n      ...super.toJSON(),\n      diasTramiteBancario: this.diasTramiteBancario,\n      comisionTransferenciaUSD: this.comisionTransferenciaUSD,\n      tipoCambioAplicado: this.tipoCambioAplicado,\n      montoCRC: this.montoCRC,\n      recargoMoraCRC: this.recargoMoraCRC,\n      montoTotalConMoraCRC: this.montoTotalConMoraCRC\n    };\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 5: FacturaFactory (Patrón Factory)\n// ----------------------------------------------------------------------------\nclass FacturaFactory {\n  static crear(datos = {}) {\n    const categoria = String(datos.categoria || '').trim().toLowerCase();\n    const moneda = String(datos.moneda || '').trim().toUpperCase();\n\n    if (categoria === 'internacional' || moneda === 'USD') {\n      return new FacturaInternacional(datos);\n    }\n    return new FacturaNacional(datos);\n  }\n\n  static crearDesdeJSON(datos) {\n    return FacturaFactory.crear(datos);\n  }\n}\n\n// ----------------------------------------------------------------------------\n// CLASE 6: HistorialTendencia (Reto 4: Análisis de Tendencia Financiera)\n// ----------------------------------------------------------------------------\nclass HistorialTendencia {\n  constructor(historialPrevio = []) {\n    this.historial = Array.isArray(historialPrevio) ? [...historialPrevio] : [];\n  }\n\n  analizarTendencia(ejecucionActual = {}) {\n    const total = Number(ejecucionActual.totalFacturasEvaluadas) || 0;\n    const vencidas = Number(ejecucionActual.cantidadFacturasVencidas) || 0;\n    const montoVencido = Number(ejecucionActual.montoTotalVencido) || 0;\n\n    const porcentajeActual = total > 0\n      ? Math.round((vencidas / total) * 10000) / 100\n      : 0;\n\n    if (this.historial.length === 0) {\n      return {\n        estadoTendencia: 'ESTABLE',\n        alertaCritica: false,\n        porcentajeActual,\n        porcentajePrevio: null,\n        promedioHistorico: porcentajeActual,\n        variacionPorcentual: 0,\n        montoVencidoActual: montoVencido,\n        montoVencidoPrevio: null,\n        mensajeDiagnostico: 'Primer registro de ejecución. Sin historial previo.',\n        timestampAnalisis: new Date().toISOString()\n      };\n    }\n\n    const ultimoRegistro = this.historial[this.historial.length - 1];\n    const porcentajePrevio = Number(ultimoRegistro.porcentajeMorosidad) || 0;\n    const montoVencidoPrevio = Number(ultimoRegistro.montoTotalVencido) || 0;\n\n    const sumaPorcentajes = this.historial.reduce((acc, r) => acc + (Number(r.porcentajeMorosidad) || 0), 0);\n    const promedioHistorico = Math.round((sumaPorcentajes / this.historial.length) * 100) / 100;\n    const variacionPorcentual = Math.round((porcentajeActual - porcentajePrevio) * 100) / 100;\n\n    let estadoTendencia = 'ESTABLE';\n    let alertaCritica = false;\n    let mensajeDiagnostico = '';\n\n    if (variacionPorcentual > 2.0 || montoVencido > montoVencidoPrevio * 1.15) {\n      estadoTendencia = 'EMPEORANDO';\n      alertaCritica = true;\n      mensajeDiagnostico = `ALERTA CRÍTICA: Morosidad aumentó del ${porcentajePrevio}% al ${porcentajeActual}% (+${variacionPorcentual}%). Monto en mora subió a ₡${montoVencido.toLocaleString('es-CR')}.`;\n    } else if (variacionPorcentual < -2.0) {\n      estadoTendencia = 'MEJORANDO';\n      alertaCritica = false;\n      mensajeDiagnostico = `TENDENCIA POSITIVA: Morosidad disminuyó del ${porcentajePrevio}% al ${porcentajeActual}% (${variacionPorcentual}%).`;\n    } else {\n      estadoTendencia = 'ESTABLE';\n      alertaCritica = false;\n      mensajeDiagnostico = `TENDENCIA ESTABLE: Morosidad en ${porcentajeActual}% (variación ${variacionPorcentual}%).`;\n    }\n\n    return {\n      estadoTendencia,\n      alertaCritica,\n      porcentajeActual,\n      porcentajePrevio,\n      promedioHistorico,\n      variacionPorcentual,\n      montoVencidoActual: montoVencido,\n      montoVencidoPrevio,\n      mensajeDiagnostico,\n      timestampAnalisis: new Date().toISOString()\n    };\n  }\n\n  generarRegistroHistorico(ejecucionActual = {}, tendencia = {}) {\n    return {\n      id: `EJEC-${Date.now().toString().slice(-6)}`,\n      fechaEjecucion: new Date().toISOString(),\n      totalFacturasEvaluadas: Number(ejecucionActual.totalFacturasEvaluadas) || 0,\n      cantidadFacturasVencidas: Number(ejecucionActual.cantidadFacturasVencidas) || 0,\n      porcentajeMorosidad: tendencia.porcentajeActual ?? 0,\n      montoTotalVencido: Number(ejecucionActual.montoTotalVencido) || 0,\n      estadoTendencia: tendencia.estadoTendencia || 'ESTABLE',\n      alertaCritica: Boolean(tendencia.alertaCritica)\n    };\n  }\n}\n\n// ============================================================================\n// ORQUESTACIÓN EN n8n CON FUSIÓN DE 4 FUENTES (Reto 2, 3 y 4)\n// ============================================================================\n\nconst todosLosItems = $input.all().map(item => item.json);\n\n// 1. Extracción de Feriados (Fuente 1: date.nager.at)\nlet feriadosRaw = [];\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoFeriados = $('Consultar Feriados CR API');\n    if (nodoFeriados && typeof nodoFeriados.all === 'function') {\n      feriadosRaw = nodoFeriados.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\nif (feriadosRaw.length === 0) {\n  feriadosRaw = todosLosItems.filter(i => i && i.date && (i.localName !== undefined || i.name !== undefined));\n}\n\n// 2. Extracción de Tipo de Cambio USD/CRC (Fuente 2: open.er-api.com)\nlet tipoCambioUSD = 518.50; // Fallback razonable\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoTC = $('Consultar Tipo de Cambio USD API');\n    if (nodoTC && typeof nodoTC.all === 'function') {\n      const tcItems = nodoTC.all().map(i => i.json);\n      if (tcItems.length > 0 && tcItems[0].rates && tcItems[0].rates.CRC) {\n        tipoCambioUSD = Number(tcItems[0].rates.CRC);\n      }\n    }\n  }\n} catch (e) {}\nif (tipoCambioUSD === 518.50) {\n  const itemTC = todosLosItems.find(i => i && i.rates && i.rates.CRC);\n  if (itemTC) tipoCambioUSD = Number(itemTC.rates.CRC);\n}\n\n// 3. Extracción de Historial de Ejecuciones (Fuente 3: JSON Server /historial_ejecuciones)\nlet historialPrevio = [];\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoHistorial = $('Obtener Historial Ejecuciones');\n    if (nodoHistorial && typeof nodoHistorial.all === 'function') {\n      historialPrevio = nodoHistorial.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\nif (historialPrevio.length === 0) {\n  historialPrevio = todosLosItems.filter(i => i && i.porcentajeMorosidad !== undefined && i.id && i.id.startsWith('EJEC'));\n}\n\n// 4. Extracción de Facturas Pendientes (Fuente 4: JSON Server /facturas?estado=pendiente)\nlet facturasRaw = [];\ntry {\n  if (typeof $ !== 'undefined') {\n    const nodoFacturas = $('Obtener Facturas Pendientes');\n    if (nodoFacturas && typeof nodoFacturas.all === 'function') {\n      facturasRaw = nodoFacturas.all().map(i => i.json);\n    }\n  }\n} catch (e) {}\nif (facturasRaw.length === 0) {\n  facturasRaw = todosLosItems.filter(i => i && i.id && i.id.startsWith('FAC-'));\n}\n\n// 5. Inicializar Calendario e Instanciar Facturas\nconst calendario = new CalendarioLaboral({\n  anio: 2026,\n  pais: 'CR',\n  feriadosRaw\n});\n\nconst fechaActual = new Date();\nconst facturasValidas = [];\nconst facturasFinales = [];\nlet cantidadVencidas = 0;\nlet montoTotalVencidoCRC = 0;\n\nfor (const datos of facturasRaw) {\n  try {\n    const factura = FacturaFactory.crear(datos);\n\n    if (factura.validarDatos()) {\n      factura.evaluarEstado(calendario, fechaActual, { tipoCambio: tipoCambioUSD });\n      if (factura.estado === 'vencida') {\n        cantidadVencidas++;\n        montoTotalVencidoCRC += (factura.montoTotalConMoraCRC || factura.montoTotalConMora || 0);\n      }\n      facturasValidas.push(factura);\n    }\n\n    const payload = factura.toJSON();\n    payload.modoContingenciaSinAPI = calendario.modoContingenciaSinAPI;\n    facturasFinales.push(payload);\n  } catch (err) {\n    facturasFinales.push({\n      id: datos?.id ?? 'DESCONOCIDO',\n      cliente: datos?.cliente ?? 'DESCONOCIDO',\n      monto: datos?.monto ?? 0,\n      fechaEmision: datos?.fechaEmision ?? '',\n      estado: datos?.estado ?? 'rechazada',\n      errorValidacion: true,\n      motivoError: `Excepción no controlada: ${err.message}`,\n      modoContingenciaSinAPI: calendario.modoContingenciaSinAPI\n    });\n  }\n}\n\n// 6. Análisis de Historial y Tendencia (Reto 4)\nconst analizador = new HistorialTendencia(historialPrevio);\nconst ejecucionActualMetricas = {\n  totalFacturasEvaluadas: facturasValidas.length,\n  cantidadFacturasVencidas: cantidadVencidas,\n  montoTotalVencido: Math.round(montoTotalVencidoCRC * 100) / 100,\n  porcentajeMorosidad: facturasValidas.length > 0\n    ? Math.round((cantidadVencidas / facturasValidas.length) * 10000) / 100\n    : 0\n};\n\nconst diagnosticoTendencia = analizador.analizarTendencia(ejecucionActualMetricas);\nconst nuevoRegistroHistorico = analizador.generarRegistroHistorico(ejecucionActualMetricas, diagnosticoTendencia);\n\n// 7. Enriquecer cada item con el diagnóstico de tendencia y datos para persistencia/notificación\nconst itemsSalida = facturasFinales.map(fac => ({\n  ...fac,\n  tipoCambioUSD,\n  diagnosticoTendencia: diagnosticoTendencia.estadoTendencia,\n  alertaCriticaTendencia: diagnosticoTendencia.alertaCritica,\n  resumenDiagnostico: diagnosticoTendencia.mensajeDiagnostico,\n  morosidadActualPorcentaje: diagnosticoTendencia.porcentajeActual,\n  nuevoRegistroHistorico\n}));\n\n// Retorno bajo el contrato de n8n\nreturn itemsSalida.map(item => ({ json: item }));\n"
       },
       "id": "node-code-procesar",
-      "name": "Procesar Facturas y Calendario (POO)",
+      "name": "Procesar Facturas y Tendencia (POO)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        320
+        940,
+        400
       ]
     },
     {
@@ -119,8 +154,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1240,
-        320
+        1200,
+        400
       ]
     },
     {
@@ -129,7 +164,7 @@
         "url": "=http://localhost:3000/facturas/{{ $json.id }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"estado\": \"{{ $json.estado }}\",\n  \"fechaVencimiento\": \"{{ $json.fechaVencimiento }}\",\n  \"diasHabilesRestantes\": {{ $json.diasHabilesRestantes }},\n  \"recargoMora\": {{ $json.recargoMora }},\n  \"montoTotalConMora\": {{ $json.montoTotalConMora }},\n  \"alertaPrioridad\": \"{{ $json.alertaPrioridad }}\"\n}",
+        "jsonBody": "={\n  \"estado\": \"{{ $json.estado }}\",\n  \"fechaVencimiento\": \"{{ $json.fechaVencimiento }}\",\n  \"diasHabilesRestantes\": {{ $json.diasHabilesRestantes }},\n  \"recargoMora\": {{ $json.recargoMora }},\n  \"montoTotalConMora\": {{ $json.montoTotalConMora }},\n  \"tipoCambioAplicado\": {{ $json.tipoCambioAplicado }},\n  \"montoCRC\": {{ $json.montoCRC }},\n  \"montoTotalConMoraCRC\": {{ $json.montoTotalConMoraCRC }},\n  \"alertaPrioridad\": \"{{ $json.alertaPrioridad }}\"\n}",
         "options": {}
       },
       "id": "node-http-actualizar",
@@ -137,9 +172,102 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1500,
-        220
+        1460,
+        240
       ]
+    },
+    {
+      "parameters": {
+        "maxItems": 1
+      },
+      "id": "node-limit-historial",
+      "name": "Filtrar Unico Resumen Historial",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/historial_ejecuciones",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.nuevoRegistroHistorico) }}",
+        "options": {}
+      },
+      "id": "node-http-guardar-historial",
+      "name": "Guardar Histórico JSON Server",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1720,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-vencida",
+              "leftValue": "={{ $json.estado }}",
+              "rightValue": "vencida",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-empeorando",
+              "leftValue": "={{ $json.alertaCriticaTendencia }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "node-if-critica",
+      "name": "Situación Crítica / Vencida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1720,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alertas-cobranza@facturacion-ticosoft.cr",
+        "toEmail": "gerencia-financiera@facturacion-ticosoft.cr",
+        "subject": "=🚨 ALERTA FINANCIERA: Factura {{ $json.id }} ({{ $json.cliente }}) | Tendencia {{ $json.diagnosticoTendencia }}",
+        "emailFormat": "html",
+        "html": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa;\">\n  <h2 style=\"color: #c62828; margin-top: 0;\">🚨 Alerta Crítica de Cobranza</h2>\n  <p style=\"font-size: 14px; color: #333;\">El sistema automatizado ha detectado morosidad o deterioro en la cartera:</p>\n  <table style=\"width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;\">\n    <tr style=\"background-color: #fff;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Factura ID:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.id }} ({{ $json.tipoFactura }})</td></tr>\n    <tr style=\"background-color: #f9f9f9;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Cliente:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.cliente }} ({{ $json.tipoCliente }})</td></tr>\n    <tr style=\"background-color: #fff;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Monto Original:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.moneda === 'USD' ? '$' : '₡' }}{{ $json.monto }} {{ $json.moneda }}</td></tr>\n    <tr style=\"background-color: #f9f9f9;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Total con Mora (CRC):</strong></td><td style=\"padding: 8px; border: 1px solid #ddd; color: #c62828; font-weight: bold;\">₡{{ $json.montoTotalConMoraCRC || $json.montoTotalConMora }}</td></tr>\n    <tr style=\"background-color: #fff;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Días de Atraso:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.diasHabilesRestantes }} días hábiles</td></tr>\n    <tr style=\"background-color: #f9f9f9;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Tendencia Global:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd; font-weight: bold;\">{{ $json.diagnosticoTendencia }} (Morosidad: {{ $json.morosidadActualPorcentaje }}%)</td></tr>\n  </table>\n  <p style=\"margin-top: 15px; font-size: 12px; color: #555;\"><strong>Diagnóstico:</strong> {{ $json.resumenDiagnostico }}</p>\n</div>",
+        "options": {}
+      },
+      "id": "node-email-alerta",
+      "name": "Notificar Correo Situación Crítica",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1980,
+        240
+      ],
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -152,8 +280,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1500,
-        440
+        1460,
+        560
       ]
     }
   ],
@@ -167,7 +295,17 @@
             "index": 0
           },
           {
+            "node": "Consultar Tipo de Cambio USD API",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Obtener Facturas Pendientes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Obtener Historial Ejecuciones",
             "type": "main",
             "index": 0
           }
@@ -183,7 +321,17 @@
             "index": 0
           },
           {
+            "node": "Consultar Tipo de Cambio USD API",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Obtener Facturas Pendientes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Obtener Historial Ejecuciones",
             "type": "main",
             "index": 0
           }
@@ -194,9 +342,20 @@
       "main": [
         [
           {
-            "node": "Sincronizar Entradas",
+            "node": "Sincronizar Fuentes (Merge)",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Tipo de Cambio USD API": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar Fuentes (Merge)",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -205,25 +364,36 @@
       "main": [
         [
           {
-            "node": "Sincronizar Entradas",
+            "node": "Sincronizar Fuentes (Merge)",
             "type": "main",
-            "index": 1
+            "index": 2
           }
         ]
       ]
     },
-    "Sincronizar Entradas": {
+    "Obtener Historial Ejecuciones": {
       "main": [
         [
           {
-            "node": "Procesar Facturas y Calendario (POO)",
+            "node": "Sincronizar Fuentes (Merge)",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Sincronizar Fuentes (Merge)": {
+      "main": [
+        [
+          {
+            "node": "Procesar Facturas y Tendencia (POO)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Procesar Facturas y Calendario (POO)": {
+    "Procesar Facturas y Tendencia (POO)": {
       "main": [
         [
           {
@@ -241,11 +411,49 @@
             "node": "Actualizar Factura JSON Server",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Filtrar Unico Resumen Historial",
+            "type": "main",
+            "index": 0
           }
         ],
         [
           {
             "node": "Registro Auditoría Errores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Unico Resumen Historial": {
+      "main": [
+        [
+          {
+            "node": "Guardar Histórico JSON Server",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Factura JSON Server": {
+      "main": [
+        [
+          {
+            "node": "Situación Crítica / Vencida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Situación Crítica / Vencida?": {
+      "main": [
+        [
+          {
+            "node": "Notificar Correo Situación Crítica",
             "type": "main",
             "index": 0
           }

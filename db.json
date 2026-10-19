@@ -3,6 +3,8 @@
     {
       "id": "FAC-001",
       "cliente": "Distribuidora del Pacífico S.A.",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "regular",
       "monto": 250000,
       "fechaEmision": "2026-09-10",
@@ -17,6 +19,8 @@
     {
       "id": "FAC-002",
       "cliente": "Corporación Transnacional Alajuela S.A.",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "vip",
       "monto": 800000,
       "fechaEmision": "2026-09-01",
@@ -30,6 +34,8 @@
     {
       "id": "FAC-003",
       "cliente": "Comercializadora San José Limitada",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "regular",
       "monto": 420000,
       "fechaEmision": "2026-10-01",
@@ -44,19 +50,23 @@
     {
       "id": "FAC-004",
       "cliente": "Tecnologías Globales de Cartago S.A.",
+      "categoria": "internacional",
+      "moneda": "USD",
       "tipoCliente": "vip",
-      "monto": 1250000,
+      "monto": 2500,
       "fechaEmision": "2026-10-12",
       "estado": "pendiente",
       "fechaVencimiento": "2026-11-09",
       "diasHabilesRestantes": 15,
       "recargoMora": 0,
-      "montoTotalConMora": 1250000,
+      "montoTotalConMora": 2500,
       "alertaPrioridad": "NORMAL"
     },
     {
       "id": "FAC-005",
       "cliente": "Ferretería El Tornillo Oxidado",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "regular",
       "monto": -50000,
       "fechaEmision": "2026-10-05",
@@ -66,6 +76,8 @@
     {
       "id": "FAC-006",
       "cliente": "Supermercado La Confianza",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "regular",
       "monto": 310000,
       "fechaEmision": "2026-02-31",
@@ -75,6 +87,8 @@
     {
       "id": "FAC-007",
       "cliente": "Servicios Logísticos del Caribe S.A.",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "regular",
       "monto": 185000,
       "fechaEmision": "2026-10-05",
@@ -89,11 +103,60 @@
     {
       "id": "FAC-008",
       "cliente": "Hotel Punta Leona Beach Resort",
+      "categoria": "nacional",
+      "moneda": "CRC",
       "tipoCliente": "vip",
       "monto": 950000,
       "fechaEmision": "2026-08-15",
       "plazoDiasHabiles": 20,
       "estado": "pagada"
+    },
+    {
+      "id": "FAC-009",
+      "cliente": "Global Logistics Network Miami LLC",
+      "categoria": "internacional",
+      "moneda": "USD",
+      "tipoCliente": "vip",
+      "monto": 3200,
+      "fechaEmision": "2026-09-08",
+      "estado": "vencida",
+      "fechaVencimiento": "2026-10-07",
+      "diasHabilesRestantes": -8,
+      "recargoMora": 64,
+      "montoTotalConMora": 3264,
+      "alertaPrioridad": "VENCIDA - Cobro inmediato"
+    }
+  ],
+  "historial_ejecuciones": [
+    {
+      "id": "EJEC-001",
+      "fechaEjecucion": "2026-10-16T08:00:00.000Z",
+      "totalFacturasEvaluadas": 6,
+      "cantidadFacturasVencidas": 1,
+      "porcentajeMorosidad": 16.67,
+      "montoTotalVencido": 250000,
+      "estadoTendencia": "ESTABLE",
+      "alertaCritica": false
+    },
+    {
+      "id": "EJEC-002",
+      "fechaEjecucion": "2026-10-17T08:00:00.000Z",
+      "totalFacturasEvaluadas": 7,
+      "cantidadFacturasVencidas": 2,
+      "porcentajeMorosidad": 28.57,
+      "montoTotalVencido": 1050000,
+      "estadoTendencia": "EMPEORANDO",
+      "alertaCritica": true
+    },
+    {
+      "id": "EJEC-003",
+      "fechaEjecucion": "2026-10-18T08:00:00.000Z",
+      "totalFacturasEvaluadas": 7,
+      "cantidadFacturasVencidas": 2,
+      "porcentajeMorosidad": 28.57,
+      "montoTotalVencido": 1050000,
+      "estadoTendencia": "ESTABLE",
+      "alertaCritica": false
     }
   ],
   "$schema": "./node_modules/json-server/schema.json"

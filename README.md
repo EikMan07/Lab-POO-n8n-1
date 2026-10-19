@@ -1,204 +1,188 @@
-# Laboratorio #1: Soluciones de Negocio (POO + n8n)
-## Escenario 1: Central de Facturación con Días Hábiles (Costa Rica 2026)
+# Laboratorio #1 + Extensión: Soluciones de Negocio (POO + n8n)
+## Escenario 1: Central de Facturación con Días Hábiles, Multimoneda y Tendencias (Costa Rica 2026)
 
-Este repositorio contiene la solución completa de grado empresarial para el **Escenario 1: Central de Facturación con Días Hábiles**. La solución implementa un modelo de dominio puro en **JavaScript ES6+ Orientado a Objetos (sin frameworks ni dependencias externas)** integrado en un workflow de **n8n** conectado a **JSON Server** y a la API pública de feriados de Costa Rica (`date.nager.at`).
+Este repositorio contiene la solución completa de grado empresarial para el **Laboratorio #1 y su Extensión**. La solución implementa un modelo de dominio puro en **JavaScript ES6+ Orientado a Objetos (Herencia, Polimorfismo y Patrón Factory)** integrado en un workflow de **n8n** conectado a **JSON Server**, dos APIs públicas en vivo (`date.nager.at` y `open.er-api.com`), persistencia de histórico y alertas automáticas por correo electrónico.
 
 ---
 
 ## 📋 Tabla de Contenidos
 
 1. [Estructura del Proyecto](#-estructura-del-proyecto)
-2. [Requisitos Previos](#-requisitos-previos)
-3. [Las 5 Reglas de Negocio (RN)](#-las-5-reglas-de-negocio-rn)
-4. [Manejo de Situaciones de Error](#-manejo-de-situaciones-de-error)
-5. [Guía de Ejecución Paso a Paso](#-guía-de-ejecución-paso-a-paso)
-   - [Paso 1: Levantar JSON Server](#paso-1-levantar-json-server)
-   - [Paso 2: Ejecutar la Suite de Pruebas Independientes](#paso-2-ejecutar-la-suite-de-pruebas-independientes)
-   - [Paso 3: Ejecutar la Simulación en Vivo](#paso-3-ejecutar-la-simulación-en-vivo)
-   - [Paso 4: Importar y Ejecutar el Workflow en n8n](#paso-4-importar-y-ejecutar-el-workflow-en-n8n)
-   - [Paso 5: Demostración de Modo de Contingencia (Error 2)](#paso-5-demostración-de-modo-de-contingencia-error-2)
-6. [Matriz de Trazabilidad](#-matriz-de-trazabilidad)
-7. [Documentación Adicional](#-documentación-adicional)
+2. [Los 4 Retos de la Extensión Implementados](#-los-4-retos-de-la-extensión-implementados)
+3. [Las 5 Reglas de Negocio Base (RN1 a RN5)](#-las-5-reglas-de-negocio-base-rn1-a-rn5)
+4. [Manejo de Situaciones de Error (Error 1 y Error 2)](#-manejo-de-situaciones-de-error)
+5. [Guía de Ejecución y Demostración Paso a Paso](#-guía-de-ejecución-y-demostración-paso-a-paso)
+   - [Paso 1: Demostración POO Independiente (`main.js`)](#paso-1-demostración-poo-independiente-mainjs)
+   - [Paso 2: Suite de Pruebas Automatizadas (`test_runner.js`)](#paso-2-suite-de-pruebas-automatizadas-test_runnerjs)
+   - [Paso 3: Simulación en Vivo Multifuente (`simulacion_workflow.js`)](#paso-3-simulación-en-vivo-multifuente-simulacion_workflowjs)
+   - [Paso 4: Levantar JSON Server](#paso-4-levantar-json-server)
+   - [Paso 5: Importar y Ejecutar el Workflow en n8n (`workflow-n8n.json`)](#paso-5-importar-y-ejecutar-el-workflow-en-n8n-workflow-n8njson)
+6. [Matriz de Trazabilidad de la Extensión](#-matriz-de-trazabilidad-de-la-extensión)
+7. [Documentación de Arquitectura](#-documentación-de-arquitectura)
 
 ---
 
 ## 📂 Estructura del Proyecto
 
 ```text
-Laboratorio-1/
-├── calendario_laboral.js   # Clase CalendarioLaboral (POO pura, cálculo de días hábiles y contingencia)
-├── factura.js              # Clase Factura (POO pura, validaciones, reglas RN1-RN5, mora y alertas)
+Lab-POO-n8n-1/
+├── main.js                 # PUNTO DE ENTRADA: Demostración POO en 5 secciones por consola (independiente de n8n)
+├── calendario_laboral.js   # Clase CalendarioLaboral (POO pura, cálculo de días hábiles y contingencia CR 2026)
+├── factura.js              # Jerarquía POO: Factura (base), FacturaNacional, FacturaInternacional y FacturaFactory
+├── historial_tendencia.js  # Clase HistorialTendencia: Análisis comparativo de morosidad y diagnóstico (Reto 4)
 ├── dominio_facturacion.js  # Módulo consolidado de dominio y ServicioFacturacion
-├── codigo_nodo_n8n.js      # Código JavaScript puro empaquetado para el nodo Code de n8n
-├── db.json                 # Base de datos inicial para JSON Server con casos de prueba
-├── test_runner.js          # Suite de 38 pruebas automatizadas independientes en Node.js puro
-├── simulacion_workflow.js  # Simulación interactiva en vivo del workflow de n8n contra JSON Server
-├── build_workflow.js       # Script que genera el archivo JSON de n8n sincronizado con el código POO
-├── workflow-n8n.json       # Workflow exportado listo para importar en n8n (2.43.7+)
-├── LOGICA_NEGOCIO.md       # Documento exhaustivo de arquitectura, reglas, diagramas UML y de flujo
+├── codigo_nodo_n8n.js      # Código JavaScript puro empaquetado para el nodo Code de n8n (sincronizado 100%)
+├── db.json                 # Base de datos JSON Server con facturas multimoneda e historial_ejecuciones
+├── test_runner.js          # Suite de 52 pruebas automatizadas independientes en Node.js puro
+├── simulacion_workflow.js  # Simulación interactiva de las 4 fuentes en vivo y disparo de alertas
+├── build_workflow.js       # Script que compila workflow-n8n.json a partir del código JS real
+├── workflow-n8n.json       # Workflow exportado listo para importar en n8n (v2.43.7+)
+├── LOGICA_NEGOCIO.md       # Documento exhaustivo de arquitectura, diagramas UML Mermaid y métricas
 └── README.md               # Este archivo de documentación
 ```
 
 ---
 
-## ⚙ Requisitos Previos
+## 🌟 Los 4 Retos de la Extensión Implementados
 
-- **Node.js**: v18.0.0 o superior (`node -v`)
-- **JSON Server**: v1.0.0-beta o superior (`npx json-server --version`)
-- **n8n**: Instalación local o en la nube (`n8n --version` o acceso a interfaz web en `http://localhost:5678`)
-- Conexión a Internet para consultar la API pública `https://date.nager.at/api/v3/PublicHolidays/2026/CR` (si se pierde la conexión, el sistema activa automáticamente su modo de contingencia).
+### 1. Reto 1: Jerarquía de Clases con Herencia y Polimorfismo
+- **Clase Base:** `Factura` encapsula validaciones (`validarDatos`), propiedades base y serialización (`toJSON`).
+- **Subclase `FacturaNacional` (`extends Factura`):**
+  - Moneda: `CRC`.
+  - Plazos crediticios estándar (15 días Regular / 20 días VIP).
+  - Reglas tributarias locales (IVA 13%) y recargo de mora en colones.
+- **Subclase `FacturaInternacional` (`extends Factura`):**
+  - Moneda: `USD`.
+  - **Polimorfismo en plazo:** Suma **3 días hábiles adicionales** por trámites bancarios internacionales SWIFT (`plazoEfectivo = plazoBase + 3`).
+  - **Polimorfismo en mora:** Aplica tasa de mora (5% o 2%) + **$25 USD de comisión bancaria fija de transferencia**.
+  - **Conversión cambiaria:** Convierte automáticamente los montos a colones (`montoCRC`, `montoTotalConMoraCRC`) según la tasa oficial de la API de tipo de cambio.
+- **Patrón Factory:** `FacturaFactory.crearDesdeJSON(datos)` determina en tiempo de ejecución la subclase a instanciar según la categoría (`nacional` o `internacional`) o moneda (`CRC` o `USD`).
+
+### 2. Reto 2: Segunda Fuente Externa + Nodo Merge Cuádruple
+- Se conecta la API pública en tiempo real `https://open.er-api.com/v6/latest/USD` (sin API key) mediante un nuevo nodo HTTP Request con `Continue On Fail`.
+- Un nodo **Merge** (`n8n-nodes-base.merge` con `numberInputs: 4`) unifica de forma síncrona:
+  1. Feriados oficiales (`date.nager.at`).
+  2. Tipo de cambio USD/CRC (`open.er-api.com`).
+  3. Facturas pendientes (`JSON Server /facturas?estado=pendiente`).
+  4. Historial previo (`JSON Server /historial_ejecuciones`).
+
+### 3. Reto 3: Notificación Automática por Correo en Situación Crítica
+- En la bifurcación final del workflow, un nodo condicional evalúa si la factura está en estado `"vencida"` o si la tendencia global es `"EMPEORANDO"`.
+- Ante una situación crítica, un nodo `emailSend` envía automáticamente un reporte detallado con formato HTML a la gerencia de cobranzas (con `Continue On Fail` activado para no detener la ejecución si no hay servidor SMTP local).
+
+### 4. Reto 4: Historial y Análisis de Tendencia Financiera
+- Colección `"historial_ejecuciones"` en `db.json` con cortes históricos de ejecuciones previas.
+- Clase `HistorialTendencia`: analiza la variación de morosidad ($\Delta$):
+  - **`"EMPEORANDO"`:** Si la morosidad aumenta $> +2.0\%$ o el monto vencido sube $> 15\%$. Activa alerta crítica.
+  - **`"MEJORANDO"`:** Si la morosidad disminuye $> -2.0\%$.
+  - **`"ESTABLE"`:** Variaciones dentro del rango $\pm 2.0\%$.
+- El workflow persiste el corte actual mediante `POST http://localhost:3000/historial_ejecuciones` limitando a un único registro consolidado.
 
 ---
 
-## 💼 Las 5 Reglas de Negocio (RN)
+## 💼 Las 5 Reglas de Negocio Base (RN1 a RN5)
 
-1. **RN1 (Exclusión de inhábiles):** El conteo del plazo de vencimiento inicia el día siguiente a la `fechaEmision` y salta estrictamente sábados, domingos y los 11 feriados oficiales de Costa Rica devueltos por `date.nager.at`.
-2. **RN2 (Plazo según tipo de cliente):** Las facturas estándar otorgan **15 días hábiles**. Si `tipoCliente === "vip"` y no se especificó un plazo explícito, se otorgan **20 días hábiles**. Si se indica un plazo personalizado válido, se respeta.
-3. **RN3 (Cambio automático a "vencida"):** Si la fecha actual del sistema es estrictamente mayor a la `fechaVencimiento` calculada y la factura está `"pendiente"`, su estado cambia automáticamente a `"vencida"`.
-4. **RN4 (Cálculo de recargo por mora):** Toda factura en estado `"vencida"` recibe un recargo administrativo:
-   - **Cliente Regular:** 5% sobre el monto original.
-   - **Cliente VIP:** 2% preferencial sobre el monto original.
-   - Se calcula y persiste el `recargoMora` y el `montoTotalConMora`.
-5. **RN5 (Alerta de vencimiento próximo):** Si una factura sigue `"pendiente"` pero le quedan 3 días hábiles o menos (`0 <= diasHabilesRestantes <= 3`), se le asigna `alertaPrioridad: "ALTA - Próxima a vencer"`. En caso contrario, mantiene `"NORMAL"`.
+1. **RN1 (Exclusión de inhábiles):** El conteo del plazo inicia el día hábil siguiente a la emisión y salta sábados, domingos y los 11 feriados oficiales de Costa Rica.
+2. **RN2 (Plazo según tipo de cliente):** Clientes estándar reciben 15 días hábiles; clientes VIP reciben 20 días hábiles (a los que se suman 3 días si es internacional).
+3. **RN3 (Cambio automático a "vencida"):** Si la fecha del sistema es estrictamente mayor al vencimiento y sigue pendiente, muta a `"vencida"`.
+4. **RN4 (Recargo por mora polimórfico):** 5% para clientes regulares y 2% para VIP (más comisión SWIFT en facturación internacional).
+5. **RN5 (Alerta de vencimiento próximo):** Si restan entre 0 y 3 días hábiles, se asigna prioridad `"ALTA - Próxima a vencer"`.
 
 ---
 
 ## 🛡 Manejo de Situaciones de Error
 
-### Error 1: Datos Incompletos o Corruptos en Facturas
-- **Caso:** Facturas con montos no positivos (`monto <= 0`), fechas corruptas o no existentes (ej. `2026-02-31`) o campos obligatorios vacíos.
-- **Solución:** La clase `Factura` captura los errores mediante `validarDatos()`, marca `errorValidacion: true` y registra la causa en `motivoError`. En n8n, el nodo `IF` desvía estas facturas a la rama de **Auditoría de Rechazos** sin detener la ejecución de las demás facturas ni corromper JSON Server.
-
-### Error 2: Fallo o Caída de la API Externa de Feriados
-- **Caso:** Caída de red, error HTTP 500 o respuesta vacía en `date.nager.at`.
-- **Solución:** El nodo HTTP Request de n8n tiene `continueOnFail: true` / `onError: "continueRegularOutput"`. La clase `CalendarioLaboral` detecta la ausencia de datos y activa automáticamente su **Modo de Contingencia** (`modoContingenciaSinAPI: true`), cargando el catálogo oficial base `FERIADOS_BASE_CR_2026` para calcular con total precisión.
+- **Error 1 (Facturas corruptas):** Captura montos `<= 0` o fechas inexistentes marcando `errorValidacion: true` y desviándolas a auditoría sin detener el flujo.
+- **Error 2 (Caída de APIs externas):** Ambos nodos HTTP de las APIs externas tienen `Continue On Fail`. Si `date.nager.at` o `open.er-api.com` fallan, se activan los modos de contingencia con catálogos estáticos oficiales.
 
 ---
 
-## 🚀 Guía de Ejecución Paso a Paso
+## 🚀 Guía de Ejecución y Demostración Paso a Paso
 
-### Paso 1: Levantar JSON Server
+### Paso 1: Demostración POO Independiente (`main.js`)
 
-Abre una terminal en la carpeta `Laboratorio-1` y ejecuta:
+Para comprobar las clases, herencia, polimorfismo y análisis de tendencia **sin requerir n8n ni JSON Server encendidos**:
 
 ```bash
-npx json-server db.json --port 3000
+node main.js
 ```
 
-Verifica la base de datos en tu navegador o terminal:
-- `http://localhost:3000/facturas` (ver todas)
-- `http://localhost:3000/facturas?estado=pendiente` (solo pendientes)
+**Salida en consola:**
+- **Sección 1:** Pruebas unitarias de `CalendarioLaboral`.
+- **Sección 2:** Demostración polimórfica: `FacturaNacional` vs `FacturaInternacional` (plazos extendidos, conversión USD/CRC, comisiones SWIFT).
+- **Sección 3:** Demostración de los 2 casos de error (captura de datos corruptos y contingencia de API).
+- **Sección 4:** Análisis de tendencia histórica con diagnóstico de cobranza.
+- **Sección 5:** Tablas comparativas limpias generadas con `console.table`.
 
 ---
 
-### Paso 2: Ejecutar la Suite de Pruebas Independientes
+### Paso 2: Suite de Pruebas Automatizadas (`test_runner.js`)
 
-En otra terminal, ejecuta el runner de pruebas automatizadas:
+Para ejecutar la suite completa de 52 aserciones automatizadas:
 
 ```bash
 node test_runner.js
 ```
 
-**Resultado esperado:**
-```text
-======================================================================
- LABORATORIO #1: SOLUCIONES DE NEGOCIO (POO + n8n) - SUITE DE PRUEBAS
- Escenario 1: Central de Facturación con Días Hábiles (Costa Rica 2026)
-======================================================================
-
-1. Pruebas Unitarias: CalendarioLaboral (POO pura)
-  ✔ [PASS] Sábado 2026-09-12 es fin de semana
-  ✔ [PASS] Domingo 2026-09-13 es fin de semana
-  ✔ [PASS] Lunes 2026-09-14 NO es fin de semana
-  ✔ [PASS] 2026-09-15 (Independencia) es feriado oficial
-  ...
-2. Pruebas de Reglas de Negocio (RN1 - RN5)
-  ✔ [PASS] RN1: sumarDiasHabiles("2026-09-10", 15) calcula exactamente "2026-10-02"
-  ✔ [PASS] RN2: Factura regular sin plazo asigna 15 días hábiles
-  ✔ [PASS] RN2: Factura VIP sin plazo asigna 20 días hábiles
-  ✔ [PASS] RN3: Factura regular cambia a estado "vencida"
-  ✔ [PASS] RN4: Recargo de mora regular es 5% de 250,000 = 12,500
-  ✔ [PASS] RN4: Recargo de mora VIP es 2% de 800,000 = 16,000
-  ✔ [PASS] RN5: Se asigna alertaPrioridad "ALTA - Próxima a vencer"
-3. Pruebas de Situaciones de Error Obligatorias
-  ✔ [PASS] Error 1A: Captura factura con monto <= 0 marcando errorValidacion = true
-  ✔ [PASS] Error 1B: Captura factura con fecha de emisión inexistente o corrupta
-  ✔ [PASS] Error 2: Si la API de feriados falla, activa modoContingenciaSinAPI = true
-4. Prueba de Integración: Procesamiento de Lote db.json
-  ✔ [PASS] Recibe 7 facturas pendientes
-  ✔ [PASS] 5 facturas superan la validación de integridad
-  ✔ [PASS] 2 facturas son rechazadas por datos corruptos
-
-----------------------------------------------------------------------
-RESUMEN DE PRUEBAS: Total: 38 | Exitosas: 38 | Fallidas: 0
-✔ TODAS LAS PRUEBAS PASARON EXITOSAMENTE.
-```
-
 ---
 
-### Paso 3: Ejecutar la Simulación en Vivo
+### Paso 3: Simulación en Vivo Multifuente (`simulacion_workflow.js`)
 
-Para validar la comunicación HTTP en vivo con JSON Server y la API de feriados antes de ir a n8n:
+Para probar la integración de red en vivo consumiendo las dos APIs externas (`date.nager.at` y `open.er-api.com`) y JSON Server:
 
 ```bash
 node simulacion_workflow.js
 ```
 
-Este script ejecuta en vivo exactamente el mismo código que corre dentro de n8n, mostrando las facturas válidas que se actualizarán y las rechazadas que irán a auditoría.
+---
+
+### Paso 4: Levantar JSON Server
+
+En una terminal dedicada dentro de `Lab-POO-n8n-1`:
+
+```bash
+npx json-server db.json --port 3000
+```
+
+Verifica los endpoints:
+- `http://localhost:3000/facturas` (todas las facturas)
+- `http://localhost:3000/facturas?estado=pendiente` (pendientes)
+- `http://localhost:3000/historial_ejecuciones` (historial de tendencias)
 
 ---
 
-### Paso 4: Importar y Ejecutar el Workflow en n8n
+### Paso 5: Importar y Ejecutar el Workflow en n8n (`workflow-n8n.json`)
 
-1. Abre tu instancia local de **n8n** en `http://localhost:5678`.
-2. En el menú superior derecho, haz clic en **Workflows** ➔ **Import from File...** (o presiona `Ctrl + O`).
-3. Selecciona el archivo `workflow-n8n.json` ubicado en `Laboratorio-1/workflow-n8n.json`.
-4. Observarás la arquitectura de nodos completamente configurada:
-   - **Manual Trigger** y **Schedule Trigger** (08:00 AM diarios).
-   - **Consultar Feriados CR API** (`GET https://date.nager.at/api/v3/PublicHolidays/2026/CR` con `Continue on Fail`).
-   - **Obtener Facturas Pendientes** (`GET http://localhost:3000/facturas?estado=pendiente`).
-   - **Sincronizar Entradas** (Merge: Append).
-   - **Procesar Facturas y Calendario (POO)** (Nodo Code con la lógica completa).
-   - **Factura Válida?** (Nodo IF evaluando `errorValidacion === false`).
-   - **Actualizar Factura JSON Server** (Rama Válida: `PATCH http://localhost:3000/facturas/{{ $json.id }}`).
-   - **Registro Auditoría Errores** (Rama Rechazada: Log estructurado de facturas corruptas).
-5. Haz clic en **Test workflow** (o **Execute workflow**).
-6. Verifica en `db.json` o en `http://localhost:3000/facturas`: las facturas válidas habrán sido actualizadas con su nuevo estado, fecha de vencimiento, recargo de mora y alerta, mientras que las facturas inválidas permanecen aisladas en el informe de auditoría.
+1. Ingresa a tu panel de n8n en `http://localhost:5678`.
+2. En el menú superior, selecciona **Workflows** ➔ **Import from File...** y elige [workflow-n8n.json](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/workflow-n8n.json).
+3. Verás la arquitectura completa:
+   - 2 Triggers (Manual + Schedule 08:00 AM).
+   - 4 Nodos de Fuente (Feriados API + Tipo Cambio API + Facturas Pendientes + Historial Ejecuciones).
+   - 1 Nodo Merge cuádruple (`Sincronizar Fuentes`).
+   - 1 Nodo Code POO (`Procesar Facturas y Tendencia POO`).
+   - 2 Nodos IF de bifurcación (`Factura Válida?` y `Situación Crítica / Vencida?`).
+   - 2 Nodos de Actualización JSON Server (PATCH facturas y POST historial).
+   - 1 Nodo Email de alerta (`Notificar Correo Situación Crítica`).
+   - 1 Nodo de Auditoría de Rechazos (Log estructurado).
+4. Haz clic en **Test workflow**. Observarás cómo se sincronizan las 4 fuentes, se actualizan las facturas y se dispara la alerta de correo.
 
 ---
 
-### Paso 5: Demostración de Modo de Contingencia (Error 2)
+## 📊 Matriz de Trazabilidad de la Extensión
 
-Para demostrar en vivo la resiliencia del sistema ante una caída de la API de feriados:
-
-1. En n8n, edita el nodo **Consultar Feriados CR API** y cambia la URL a una inexistente: `https://date.nager.at/api/v3/PublicHolidays/2026/FALLO_SIMULADO`.
-2. Ejecuta el workflow.
-3. Observarás que:
-   - El nodo no detiene el workflow gracias a `Continue On Fail`.
-   - La clase `CalendarioLaboral` detecta la respuesta de error y activa `modoContingenciaSinAPI = true`.
-   - Las fechas de vencimiento se calculan de manera idéntica utilizando el catálogo de contingencia de 11 feriados oficiales de Costa Rica 2026.
-
----
-
-## 📊 Matriz de Trazabilidad
-
-| Requerimiento | Archivo de Implementación | Clase / Método Clave | Prueba Unitaria en `test_runner.js` |
+| Componente del Reto | Archivo Principal | Clase / Método Clave | Verificación |
 | :--- | :--- | :--- | :--- |
-| **Clase CalendarioLaboral** | [calendario_laboral.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/calendario_laboral.js) | `class CalendarioLaboral` | Bloque 1 (12 assertions) |
-| **Días Hábiles y Fines de Semana** | [calendario_laboral.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/calendario_laboral.js) | `esFinDeSemana()`, `esDiaHabil()` | `esFinDeSemana`, `esDiaHabil` |
-| **Consulta de Feriados API** | [calendario_laboral.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/calendario_laboral.js) | `#normalizarFeriados()` | `esFeriado('2026-09-15') === true` |
-| **RN1: Conteo de Plazo Hábil** | [calendario_laboral.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/calendario_laboral.js) | `sumarDiasHabiles()` | `sumarDiasHabiles('2026-09-10', 15) === '2026-10-02'` |
-| **Clase Factura** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/factura.js) | `class Factura` | Bloque 2 (14 assertions) |
-| **RN2: Plazo según Cliente (VIP/Reg)** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/factura.js) | `constructor()` | `facVIP.plazoDiasHabiles === 20` |
-| **RN3: Cambio automático a vencida** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/factura.js) | `evaluarEstado()` | `facVencidaRegular.estado === 'vencida'` |
-| **RN4: Recargo de mora (5% / 2%)** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/factura.js) | `evaluarEstado()` | Mora Regular: ₡12,500; Mora VIP: ₡16,000 |
-| **RN5: Alerta de vencimiento <= 3 días**| [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/factura.js) | `evaluarEstado()` | `alertaPrioridad: 'ALTA - Próxima a vencer'` |
-| **Error 1: Factura Corrupta / Inválida**| [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/factura.js) | `validarDatos()` | Bloque 3 (`FAC-005`, `FAC-006`) |
-| **Error 2: Fallo API / Contingencia** | [calendario_laboral.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/calendario_laboral.js) | `#normalizarFeriados()` | Bloque 3 (`modoContingenciaSinAPI === true`) |
-| **Workflow n8n Completo** | [workflow-n8n.json](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/workflow-n8n.json) | 9 Nodos interconectados | `simulacion_workflow.js` |
+| **Reto 1: Herencia** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/factura.js) | `FacturaNacional extends Factura`, `FacturaInternacional extends Factura` | `test_runner.js` (Bloque 3) |
+| **Reto 1: Polimorfismo** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/factura.js) | `evaluarEstado(calendario, fechaActual, { tipoCambio })` | `main.js` (Sección 2) |
+| **Reto 1: Factory Pattern** | [factura.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/factura.js) | `FacturaFactory.crearDesdeJSON(datos)` | `main.js` (Sección 2) |
+| **Reto 2: Segunda API Externa** | [workflow-n8n.json](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/workflow-n8n.json) | `Consultar Tipo de Cambio USD API` (`open.er-api.com`) | `simulacion_workflow.js` |
+| **Reto 2: Nodo Merge Cuádruple** | [workflow-n8n.json](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/workflow-n8n.json) | `Sincronizar Fuentes (Merge)` (`numberInputs: 4`) | `workflow-n8n.json` |
+| **Reto 3: Alerta por Correo** | [workflow-n8n.json](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/workflow-n8n.json) | `Notificar Correo Situación Crítica` (`emailSend`) | `workflow-n8n.json` |
+| **Reto 4: HistorialTendencia** | [historial_tendencia.js](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/historial_tendencia.js) | `analizarTendencia()`, `generarRegistroHistorico()` | `test_runner.js` (Bloque 4) |
+| **Reto 4: Persistencia Histórica** | [workflow-n8n.json](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/workflow-n8n.json) | `POST /historial_ejecuciones` | `main.js` (Sección 4) |
 
 ---
 
-## 📖 Documentación Adicional
+## 📖 Documentación de Arquitectura
 
-Para un análisis detallado de la arquitectura de software, diagramas de clases en Mermaid, máquina de estados y justificaciones técnicas, consulta el documento [LOGICA_NEGOCIO.md](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Laboratorio-1/LOGICA_NEGOCIO.md).
+Para detalles de modelado UML, especificaciones matemáticas de variación de morosidad y diagramas de flujo completos, consulta el archivo [LOGICA_NEGOCIO.md](file:///c:/Users/abark/OneDrive/Documentos/OneDrive/Escritorio/n8n/Lab-POO-n8n-1/LOGICA_NEGOCIO.md).

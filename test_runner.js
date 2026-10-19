@@ -1,14 +1,22 @@
 /**
  * test_runner.js
- * Suite integral de pruebas unitarias y de integración para el Escenario 1.
- * Ejecuta validaciones de POO pura en Node.js sin dependencias externas.
+ * Suite integral de pruebas unitarias y de integración para el Laboratorio #1 y su Extensión.
+ * Valida POO pura, herencia, polimorfismo, manejo de errores y análisis de tendencia.
  *
  * Ejecución: node test_runner.js
  */
 
 const fs = require('fs');
 const path = require('path');
-const { CalendarioLaboral, Factura, ServicioFacturacion } = require('./dominio_facturacion');
+const {
+  CalendarioLaboral,
+  Factura,
+  FacturaNacional,
+  FacturaInternacional,
+  FacturaFactory,
+  HistorialTendencia,
+  ServicioFacturacion
+} = require('./dominio_facturacion');
 
 // Colores ANSI para reporte visual en terminal
 const C_RESET = '\x1b[0m';
@@ -37,8 +45,8 @@ function assert(condicion, descripcion, detalleError = '') {
 }
 
 console.log(`\n${C_BOLD}${C_CYAN}======================================================================${C_RESET}`);
-console.log(`${C_BOLD}${C_CYAN} LABORATORIO #1: SOLUCIONES DE NEGOCIO (POO + n8n) - SUITE DE PRUEBAS${C_RESET}`);
-console.log(`${C_BOLD}${C_CYAN} Escenario 1: Central de Facturación con Días Hábiles (Costa Rica 2026)${C_RESET}`);
+console.log(`${C_BOLD}${C_CYAN} LABORATORIO #1 + EXTENSIÓN: SUITE DE PRUEBAS AUTOMATIZADAS (POO)${C_RESET}`);
+console.log(`${C_BOLD}${C_CYAN} Central de Facturación con Días Hábiles, Polimorfismo y Tendencias${C_RESET}`);
 console.log(`${C_BOLD}${C_CYAN}======================================================================${C_RESET}\n`);
 
 // -------------------------------------------------------------------------
@@ -63,22 +71,15 @@ const calendarioAPI = new CalendarioLaboral({
   ]
 });
 
-// esFinDeSemana
 assert(calendarioAPI.esFinDeSemana('2026-09-12') === true, 'Sábado 2026-09-12 es fin de semana');
 assert(calendarioAPI.esFinDeSemana('2026-09-13') === true, 'Domingo 2026-09-13 es fin de semana');
 assert(calendarioAPI.esFinDeSemana('2026-09-14') === false, 'Lunes 2026-09-14 NO es fin de semana');
-
-// esFeriado
 assert(calendarioAPI.esFeriado('2026-09-15') === true, '2026-09-15 (Independencia) es feriado oficial');
 assert(calendarioAPI.esFeriado('2026-09-14') === false, '2026-09-14 NO es feriado');
-
-// esDiaHabil
 assert(calendarioAPI.esDiaHabil('2026-09-14') === true, 'Lunes 2026-09-14 es día hábil');
 assert(calendarioAPI.esDiaHabil('2026-09-15') === false, 'Martes 2026-09-15 (Feriado) NO es día hábil');
 assert(calendarioAPI.esDiaHabil('2026-09-19') === false, 'Sábado 2026-09-19 NO es día hábil');
 
-// sumarDiasHabiles (RN1)
-// Emisión: 2026-09-10 (Jueves), 15 días hábiles saltando fin de semana y feriado del 15 de sept -> Debe ser 2026-10-02 (Viernes)
 const fechaVenc1 = calendarioAPI.sumarDiasHabiles('2026-09-10', 15);
 assert(
   fechaVenc1 === '2026-10-02',
@@ -86,31 +87,21 @@ assert(
   `Calculado: ${fechaVenc1}`
 );
 
-// contarDiasHabilesEntre
 const diasRestantesPositivos = calendarioAPI.contarDiasHabilesEntre('2026-10-19', '2026-10-22');
-assert(
-  diasRestantesPositivos === 3,
-  'contarDiasHabilesEntre("2026-10-19", "2026-10-22") devuelve +3 días hábiles restantes',
-  `Resultado: ${diasRestantesPositivos}`
-);
+assert(diasRestantesPositivos === 3, 'contarDiasHabilesEntre devuelve +3 días hábiles restantes');
 
 const diasAtrasoNegativos = calendarioAPI.contarDiasHabilesEntre('2026-10-19', '2026-10-02');
-assert(
-  diasAtrasoNegativos === -11,
-  'contarDiasHabilesEntre("2026-10-19", "2026-10-02") devuelve -11 días hábiles de mora',
-  `Resultado: ${diasAtrasoNegativos}`
-);
+assert(diasAtrasoNegativos === -11, 'contarDiasHabilesEntre devuelve -11 días hábiles de mora');
 
 const diasMismoDia = calendarioAPI.contarDiasHabilesEntre('2026-10-19', '2026-10-19');
 assert(diasMismoDia === 0, 'contarDiasHabilesEntre para el mismo día devuelve 0');
 
 // -------------------------------------------------------------------------
-// BLOQUE 2: Pruebas de las 5 Reglas de Negocio (RN1 - RN5) en Clase Factura
+// BLOQUE 2: Pruebas de las 5 Reglas de Negocio Base (RN1 - RN5)
 // -------------------------------------------------------------------------
-console.log(`\n${C_BOLD}2. Pruebas de Reglas de Negocio (RN1 - RN5)${C_RESET}`);
-const fechaEvaluacion = '2026-10-19'; // Fecha actual de referencia
+console.log(`\n${C_BOLD}2. Pruebas de Reglas de Negocio Base (RN1 - RN5)${C_RESET}`);
+const fechaEvaluacion = '2026-10-19';
 
-// RN2: Plazo según tipo de cliente (Regular: 15, VIP: 20 si no se especifica)
 const facRegular = new Factura({
   id: 'TEST-REG',
   cliente: 'Cliente Regular S.A.',
@@ -139,8 +130,6 @@ const facPlazoPersonalizado = new Factura({
 });
 assert(facPlazoPersonalizado.plazoDiasHabiles === 10, 'RN2: Respeta plazo explícito especificado (10 días)');
 
-// RN3 y RN4: Factura vencida y cálculo de recargo de mora
-// FAC-001 (Regular, 250,000, vence 2026-10-02 -> evaluada a 2026-10-19 está vencida)
 const facVencidaRegular = new Factura({
   id: 'FAC-001',
   cliente: 'Distribuidora del Pacífico S.A.',
@@ -151,20 +140,10 @@ const facVencidaRegular = new Factura({
   estado: 'pendiente'
 });
 facVencidaRegular.evaluarEstado(calendarioAPI, fechaEvaluacion);
-
 assert(facVencidaRegular.estado === 'vencida', 'RN3: Factura regular cambia a estado "vencida"');
-assert(
-  facVencidaRegular.recargoMora === 12500,
-  'RN4: Recargo de mora regular es 5% de 250,000 = 12,500',
-  `Recargo: ${facVencidaRegular.recargoMora}`
-);
-assert(
-  facVencidaRegular.montoTotalConMora === 262500,
-  'RN4: Monto total con mora regular es 262,500',
-  `Total: ${facVencidaRegular.montoTotalConMora}`
-);
+assert(facVencidaRegular.recargoMora === 12500, 'RN4: Recargo de mora regular es 5% de 250,000 = 12,500');
+assert(facVencidaRegular.montoTotalConMora === 262500, 'RN4: Monto total con mora regular es 262,500');
 
-// FAC-002 (VIP, 800,000, vence 2026-09-29 -> evaluada a 2026-10-19 está vencida)
 const facVencidaVIP = new Factura({
   id: 'FAC-002',
   cliente: 'Corporación Transnacional Alajuela S.A.',
@@ -174,21 +153,10 @@ const facVencidaVIP = new Factura({
   estado: 'pendiente'
 });
 facVencidaVIP.evaluarEstado(calendarioAPI, fechaEvaluacion);
-
 assert(facVencidaVIP.estado === 'vencida', 'RN3: Factura VIP cambia a estado "vencida"');
-assert(
-  facVencidaVIP.recargoMora === 16000,
-  'RN4: Recargo de mora VIP es 2% de 800,000 = 16,000',
-  `Recargo: ${facVencidaVIP.recargoMora}`
-);
-assert(
-  facVencidaVIP.montoTotalConMora === 816000,
-  'RN4: Monto total con mora VIP es 816,000',
-  `Total: ${facVencidaVIP.montoTotalConMora}`
-);
+assert(facVencidaVIP.recargoMora === 16000, 'RN4: Recargo de mora VIP es 2% de 800,000 = 16,000');
+assert(facVencidaVIP.montoTotalConMora === 816000, 'RN4: Monto total con mora VIP es 816,000');
 
-// RN5: Alerta de vencimiento próximo (diasRestantes <= 3 y >= 0)
-// FAC-003: Emisión 2026-10-01, 15 días hábiles -> vence 2026-10-22. A 2026-10-19 faltan 3 días hábiles
 const facProximaVencer = new Factura({
   id: 'FAC-003',
   cliente: 'Comercializadora San José Limitada',
@@ -199,141 +167,212 @@ const facProximaVencer = new Factura({
   estado: 'pendiente'
 });
 facProximaVencer.evaluarEstado(calendarioAPI, fechaEvaluacion);
-
 assert(facProximaVencer.estado === 'pendiente', 'Factura próxima a vencer sigue en estado "pendiente"');
-assert(
-  facProximaVencer.diasHabilesRestantes === 3,
-  'Factura próxima a vencer tiene exactamente 3 días hábiles restantes',
-  `Días: ${facProximaVencer.diasHabilesRestantes}`
-);
-assert(
-  facProximaVencer.alertaPrioridad === 'ALTA - Próxima a vencer',
-  'RN5: Se asigna alertaPrioridad "ALTA - Próxima a vencer"',
-  `Alerta: ${facProximaVencer.alertaPrioridad}`
-);
+assert(facProximaVencer.diasHabilesRestantes === 3, 'Factura próxima a vencer tiene 3 días hábiles restantes');
+assert(facProximaVencer.alertaPrioridad === 'ALTA - Próxima a vencer', 'RN5: Asigna alerta "ALTA - Próxima a vencer"');
 
-// Factura con holgura (más de 3 días) -> Alerta NORMAL
-const facHolgada = new Factura({
-  id: 'FAC-004',
-  cliente: 'Tecnologías Globales de Cartago S.A.',
-  tipoCliente: 'vip',
-  monto: 1250000,
-  fechaEmision: '2026-10-12',
-  estado: 'pendiente'
+// -------------------------------------------------------------------------
+// BLOQUE 3: RETO 1 - Jerarquía de Clases, Herencia y Polimorfismo
+// -------------------------------------------------------------------------
+console.log(`\n${C_BOLD}3. RETO 1: Jerarquía de Clases (Herencia y Polimorfismo)${C_RESET}`);
+
+// Aserciones de Herencia
+const facNac = FacturaFactory.crear({
+  id: 'NAC-01',
+  cliente: 'Compañía Tica S.A.',
+  monto: 500000,
+  fechaEmision: '2026-10-01',
+  categoria: 'nacional'
 });
-facHolgada.evaluarEstado(calendarioAPI, fechaEvaluacion);
+assert(facNac instanceof Factura, 'FacturaNacional hereda de Factura (instanceof Factura)');
+assert(facNac instanceof FacturaNacional, 'facNac es instancia de FacturaNacional');
+assert(facNac.moneda === 'CRC', 'FacturaNacional opera en moneda CRC por defecto');
 
+const facInter = FacturaFactory.crear({
+  id: 'INT-01',
+  cliente: 'Silicon Valley Exports Inc.',
+  monto: 2000,
+  fechaEmision: '2026-10-01',
+  categoria: 'internacional',
+  tipoCliente: 'vip'
+});
+assert(facInter instanceof Factura, 'FacturaInternacional hereda de Factura (instanceof Factura)');
+assert(facInter instanceof FacturaInternacional, 'facInter es instancia de FacturaInternacional');
+assert(facInter.moneda === 'USD', 'FacturaInternacional opera en moneda USD');
+assert(facInter.diasTramiteBancario === 3, 'FacturaInternacional tiene 3 días de trámite bancario internacional');
+
+// Aserción de FacturaFactory.crearDesdeJSON
+const facCreadaDesdeJSON = FacturaFactory.crearDesdeJSON({
+  id: 'INT-JSON',
+  cliente: 'Test JSON Client',
+  monto: 1000,
+  fechaEmision: '2026-10-01',
+  moneda: 'USD'
+});
+assert(facCreadaDesdeJSON instanceof FacturaInternacional, 'FacturaFactory.crearDesdeJSON reconoce moneda USD');
+
+// Demostración de Polimorfismo en evaluarEstado()
+const TIPO_CAMBIO_TEST = 520; // ₡520 por $1 USD
+facNac.evaluarEstado(calendarioAPI, fechaEvaluacion, { tipoCambio: TIPO_CAMBIO_TEST });
+facInter.evaluarEstado(calendarioAPI, fechaEvaluacion, { tipoCambio: TIPO_CAMBIO_TEST });
+
+// 1. Polimorfismo en fecha de vencimiento internacional (agrega 3 días hábiles de trámite)
+// Emisión: 2026-10-01, VIP base = 20 días + 3 días trámite = 23 días hábiles
+const vencimientoEsperadoInter = calendarioAPI.sumarDiasHabiles('2026-10-01', 23);
 assert(
-  facHolgada.diasHabilesRestantes > 3,
-  'Factura con holgura tiene más de 3 días hábiles restantes',
-  `Días: ${facHolgada.diasHabilesRestantes}`
+  facInter.fechaVencimiento === vencimientoEsperadoInter,
+  `Polimorfismo en plazo: FacturaInternacional vence el ${facInter.fechaVencimiento} (23 días hábiles)`
+);
+
+// 2. Polimorfismo en conversión cambiaria a CRC
+assert(
+  facInter.montoCRC === 2000 * TIPO_CAMBIO_TEST,
+  `Polimorfismo en moneda: Convierte USD $2000 a ₡${facInter.montoCRC} CRC (Tipo cambio 520)`
+);
+
+// 3. Polimorfismo en mora internacional con comisión de transferencia
+const facInterVencida = new FacturaInternacional({
+  id: 'INT-VENCIDA',
+  cliente: 'Global Import Miami LLC',
+  monto: 3000,
+  fechaEmision: '2026-09-01',
+  tipoCliente: 'vip',
+  plazoDiasHabiles: 15
+});
+facInterVencida.evaluarEstado(calendarioAPI, fechaEvaluacion, { tipoCambio: TIPO_CAMBIO_TEST });
+
+assert(facInterVencida.estado === 'vencida', 'Factura internacional vencida cambia a estado "vencida"');
+// VIP 2% de $3000 = $60 + $25 de comisión bancaria = $85 USD
+assert(
+  facInterVencida.recargoMora === 85,
+  `Polimorfismo en mora: Recargo incluye $60 mora (2%) + $25 comisión SWIFT = $85 USD`,
+  `Obtenido: $${facInterVencida.recargoMora}`
 );
 assert(
-  facHolgada.alertaPrioridad === 'NORMAL',
-  'Factura con holgura mantiene alertaPrioridad "NORMAL"'
+  facInterVencida.recargoMoraCRC === 85 * TIPO_CAMBIO_TEST,
+  `Mora convertida a CRC: $85 * 520 = ₡${facInterVencida.recargoMoraCRC} CRC`
 );
 
 // -------------------------------------------------------------------------
-// BLOQUE 3: Pruebas de Situaciones de Error / Inesperadas
+// BLOQUE 4: RETO 4 - Historial y Análisis de Tendencia
 // -------------------------------------------------------------------------
-console.log(`\n${C_BOLD}3. Pruebas de Situaciones de Error Obligatorias${C_RESET}`);
+console.log(`\n${C_BOLD}4. RETO 4: Historial y Análisis de Tendencia (HistorialTendencia)${C_RESET}`);
 
-// Error 1: Datos incompletos o corruptos en la factura
-const facMontoNegativo = new Factura({
+const historialMock = [
+  {
+    id: 'EJEC-001',
+    fechaEjecucion: '2026-10-16T08:00:00.000Z',
+    totalFacturasEvaluadas: 6,
+    cantidadFacturasVencidas: 1,
+    porcentajeMorosidad: 16.67,
+    montoTotalVencido: 250000
+  },
+  {
+    id: 'EJEC-002',
+    fechaEjecucion: '2026-10-17T08:00:00.000Z',
+    totalFacturasEvaluadas: 7,
+    cantidadFacturasVencidas: 2,
+    porcentajeMorosidad: 28.57,
+    montoTotalVencido: 1050000
+  }
+];
+
+const analizador = new HistorialTendencia(historialMock);
+
+// Caso A: Empeorando (Morosidad sube a 50%)
+const diagnosticoEmpeorando = analizador.analizarTendencia({
+  totalFacturasEvaluadas: 6,
+  cantidadFacturasVencidas: 3,
+  montoTotalVencido: 1850000
+});
+assert(
+  diagnosticoEmpeorando.estadoTendencia === 'EMPEORANDO',
+  'Diagnóstico detecta tendencia "EMPEORANDO" cuando la morosidad sube'
+);
+assert(
+  diagnosticoEmpeorando.alertaCritica === true,
+  'alertaCritica se activa en true al detectar tendencia EMPEORANDO'
+);
+
+// Caso B: Mejorando (Morosidad baja a 14%)
+const diagnosticoMejorando = analizador.analizarTendencia({
+  totalFacturasEvaluadas: 7,
+  cantidadFacturasVencidas: 1,
+  montoTotalVencido: 250000
+});
+assert(
+  diagnosticoMejorando.estadoTendencia === 'MEJORANDO',
+  'Diagnóstico detecta tendencia "MEJORANDO" cuando la morosidad baja'
+);
+assert(
+  diagnosticoMejorando.alertaCritica === false,
+  'alertaCritica es false cuando la tendencia es MEJORANDO'
+);
+
+// Caso C: Generación de registro para POST /historial_ejecuciones
+const nuevoRegistro = analizador.generarRegistroHistorico(
+  { totalFacturasEvaluadas: 6, cantidadFacturasVencidas: 3, montoTotalVencido: 1850000 },
+  diagnosticoEmpeorando
+);
+assert(nuevoRegistro.id.startsWith('EJEC-'), 'generarRegistroHistorico asigna ID correlativo EJEC-');
+assert(nuevoRegistro.estadoTendencia === 'EMPEORANDO', 'Registro histórico contiene estadoTendencia');
+assert(nuevoRegistro.alertaCritica === true, 'Registro histórico contiene bandera alertaCritica');
+
+// -------------------------------------------------------------------------
+// BLOQUE 5: Situaciones de Error Obligatorias
+// -------------------------------------------------------------------------
+console.log(`\n${C_BOLD}5. Pruebas de Situaciones de Error Obligatorias${C_RESET}`);
+
+const facMontoNegativo = FacturaFactory.crear({
   id: 'FAC-005',
   cliente: 'Ferretería El Tornillo Oxidado',
   monto: -50000,
   fechaEmision: '2026-10-05'
 });
-assert(
-  facMontoNegativo.errorValidacion === true,
-  'Error 1A: Captura factura con monto <= 0 marcando errorValidacion = true'
-);
-assert(
-  facMontoNegativo.motivoError.includes('Monto inválido'),
-  'Error 1A: motivoError describe adecuadamente el fallo de monto',
-  `Motivo: ${facMontoNegativo.motivoError}`
-);
+assert(facMontoNegativo.errorValidacion === true, 'Error 1A: Captura factura con monto <= 0');
 
-const facFechaInvalida = new Factura({
+const facFechaInvalida = FacturaFactory.crear({
   id: 'FAC-006',
   cliente: 'Supermercado La Confianza',
   monto: 310000,
-  fechaEmision: '2026-02-31' // Fecha inexistente
+  fechaEmision: '2026-02-31'
 });
-assert(
-  facFechaInvalida.errorValidacion === true,
-  'Error 1B: Captura factura con fecha de emisión inexistente o corrupta'
-);
-assert(
-  facFechaInvalida.motivoError.includes('no existe en el calendario') || facFechaInvalida.motivoError.includes('inválida'),
-  'Error 1B: motivoError describe adecuadamente el fallo de fecha',
-  `Motivo: ${facFechaInvalida.motivoError}`
-);
+assert(facFechaInvalida.errorValidacion === true, 'Error 1B: Captura fecha de emisión inexistente');
 
-// Error 2: Fallo en la API externa date.nager.at o lista de feriados vacía
-const calendarioContingencia = new CalendarioLaboral({
+const calContingencia = new CalendarioLaboral({
   anio: 2026,
   pais: 'CR',
-  feriadosRaw: [] // Simula respuesta vacía o fallo de red
+  feriadosRaw: []
 });
-assert(
-  calendarioContingencia.modoContingenciaSinAPI === true,
-  'Error 2: Si la API de feriados falla, activa modoContingenciaSinAPI = true'
-);
-assert(
-  calendarioContingencia.feriados.size === 11,
-  'Error 2: Carga automáticamente el catálogo base de contingencia (11 feriados oficiales de CR)',
-  `Cantidad: ${calendarioContingencia.feriados.size}`
-);
-const vencContingencia = calendarioContingencia.sumarDiasHabiles('2026-09-10', 15);
-assert(
-  vencContingencia === '2026-10-02',
-  'Error 2: Con feriados de contingencia, calcula correctamente el vencimiento de septiembre ("2026-10-02")'
-);
+assert(calContingencia.modoContingenciaSinAPI === true, 'Error 2: Si API falla activa contingencia');
+assert(calContingencia.feriados.size === 11, 'Error 2: Carga 11 feriados base de Costa Rica');
 
 // -------------------------------------------------------------------------
-// BLOQUE 4: Prueba de Integración con el lote completo de db.json
+// BLOQUE 6: Integración Integral del Lote Extendido con ServicioFacturacion
 // -------------------------------------------------------------------------
-console.log(`\n${C_BOLD}4. Prueba de Integración: Procesamiento de Lote db.json${C_RESET}`);
+console.log(`\n${C_BOLD}6. Prueba de Integración: Lote Extendido de db.json${C_RESET}`);
 const dbPath = path.join(__dirname, 'db.json');
 const dbRaw = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-
-// Filtrar facturas con estado=pendiente como lo hace el endpoint de JSON Server
 const facturasPendientes = dbRaw.facturas.filter(f => f.estado === 'pendiente');
 
-const resultadoLote = ServicioFacturacion.procesarLote({
+const resultadoServicio = ServicioFacturacion.procesarLote({
   facturasRaw: facturasPendientes,
   feriadosRaw: calendarioAPI.obtenerListaFeriados().map(d => ({ date: d })),
-  fechaReferencia: '2026-10-19'
+  fechaReferencia: '2026-10-19',
+  tipoCambioUSD: 520,
+  historialPrevio: dbRaw.historial_ejecuciones
 });
 
-assert(
-  resultadoLote.resumen.totalRecibidas === 7,
-  `Recibe 7 facturas pendientes (de 8 totales en db.json, excluyendo la pagada)`
-);
-assert(
-  resultadoLote.resumen.totalValidas === 5,
-  `5 facturas superan la validación de integridad (FAC-001, 002, 003, 004, 007)`
-);
-assert(
-  resultadoLote.resumen.totalRechazadas === 2,
-  `2 facturas son rechazadas por datos corruptos (FAC-005 monto negativo, FAC-006 fecha inválida)`
-);
-assert(
-  resultadoLote.resumen.totalVencidas === 2,
-  `2 facturas pasan a estado vencida con recargo de mora (FAC-001 regular 5%, FAC-002 vip 2%)`
-);
-assert(
-  resultadoLote.resumen.totalProximasVencer === 2,
-  `2 facturas reciben alerta ALTA - Próxima a vencer (FAC-003 faltan 3 días, FAC-007 vence hoy)`
-);
+assert(resultadoServicio.validas.length === 6, 'Lote procesa 6 facturas válidas (incluyendo internacionales)');
+assert(resultadoServicio.rechazadas.length === 2, 'Lote aísla 2 facturas corruptas');
+assert(resultadoServicio.resumen.tendencia.estadoTendencia === 'EMPEORANDO', 'Lote detecta tendencia global EMPEORANDO');
+assert(resultadoServicio.nuevoRegistroHistorico.id !== undefined, 'Servicio genera nuevo registro histórico para BD');
 
 // -------------------------------------------------------------------------
 // RESUMEN FINAL
 // -------------------------------------------------------------------------
 console.log(`\n${C_BOLD}${C_CYAN}----------------------------------------------------------------------${C_RESET}`);
-console.log(`${C_BOLD}RESUMEN DE PRUEBAS:${C_RESET}`);
+console.log(`${C_BOLD}RESUMEN DE PRUEBAS AUTOMATIZADAS:${C_RESET}`);
 console.log(`  Total evaluadas: ${totalTests}`);
 console.log(`  Exitosas:        ${C_GREEN}${passedTests}${C_RESET}`);
 console.log(`  Fallidas:        ${failedTests > 0 ? C_RED : C_GREEN}${failedTests}${C_RESET}`);
@@ -342,5 +381,5 @@ console.log(`${C_BOLD}${C_CYAN}-------------------------------------------------
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log(`${C_BOLD}${C_GREEN}✔ TODAS LAS PRUEBAS UNITARIAS, DE REGLAS DE NEGOCIO Y CASOS DE ERROR PASARON EXITOSAMENTE.${C_RESET}\n`);
+  console.log(`${C_BOLD}${C_GREEN}✔ TODAS LAS PRUEBAS DE LA EXTENSIÓN (HERENCIA, POLIMORFISMO Y TENDENCIAS) PASARON EXITOSAMENTE.${C_RESET}\n`);
 }

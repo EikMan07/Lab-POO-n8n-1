@@ -1,6 +1,6 @@
 /**
  * build_workflow.js
- * Generador automático del archivo workflow-n8n.json.
+ * Generador automático del archivo workflow-n8n.json para el Laboratorio #1 + Extensión.
  * Lee el código fuente real de codigo_nodo_n8n.js para garantizar que la
  * lógica del workflow permanezca 100% sincronizada con el modelo POO.
  */
@@ -35,7 +35,7 @@ return informeAuditoria.map(item => ({ json: item }));
 `;
 
 const workflow = {
-  name: "Laboratorio 1 - Central de Facturación con Días Hábiles (POO)",
+  name: "Laboratorio 1 Extendido - Facturación Días Hábiles, Multimoneda y Tendencias (POO)",
   nodes: [
     {
       parameters: {},
@@ -43,7 +43,7 @@ const workflow = {
       name: "Manual Trigger",
       type: "n8n-nodes-base.manualTrigger",
       typeVersion: 1,
-      position: [180, 220]
+      position: [100, 240]
     },
     {
       parameters: {
@@ -60,7 +60,7 @@ const workflow = {
       name: "Schedule Trigger (08:00 AM)",
       type: "n8n-nodes-base.scheduleTrigger",
       typeVersion: 1.2,
-      position: [180, 420]
+      position: [100, 460]
     },
     {
       parameters: {
@@ -72,7 +72,21 @@ const workflow = {
       name: "Consultar Feriados CR API",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [460, 220],
+      position: [380, 160],
+      onError: "continueRegularOutput",
+      continueOnFail: true
+    },
+    {
+      parameters: {
+        method: "GET",
+        url: "https://open.er-api.com/v6/latest/USD",
+        options: {}
+      },
+      id: "node-http-tipo-cambio",
+      name: "Consultar Tipo de Cambio USD API",
+      type: "n8n-nodes-base.httpRequest",
+      typeVersion: 4.2,
+      position: [380, 320],
       onError: "continueRegularOutput",
       continueOnFail: true
     },
@@ -86,17 +100,32 @@ const workflow = {
       name: "Obtener Facturas Pendientes",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [460, 420]
+      position: [380, 480]
     },
     {
       parameters: {
-        mode: "append"
+        method: "GET",
+        url: "http://localhost:3000/historial_ejecuciones",
+        options: {}
       },
-      id: "node-merge-inputs",
-      name: "Sincronizar Entradas",
+      id: "node-http-historial",
+      name: "Obtener Historial Ejecuciones",
+      type: "n8n-nodes-base.httpRequest",
+      typeVersion: 4.2,
+      position: [380, 640],
+      onError: "continueRegularOutput",
+      continueOnFail: true
+    },
+    {
+      parameters: {
+        mode: "append",
+        numberInputs: 4
+      },
+      id: "node-merge-fuentes",
+      name: "Sincronizar Fuentes (Merge)",
       type: "n8n-nodes-base.merge",
       typeVersion: 3,
-      position: [720, 320]
+      position: [680, 400]
     },
     {
       parameters: {
@@ -105,10 +134,10 @@ const workflow = {
         jsCode: codigoNodoProcesar
       },
       id: "node-code-procesar",
-      name: "Procesar Facturas y Calendario (POO)",
+      name: "Procesar Facturas y Tendencia (POO)",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [980, 320]
+      position: [940, 400]
     },
     {
       parameters: {
@@ -136,7 +165,7 @@ const workflow = {
       name: "Factura Válida?",
       type: "n8n-nodes-base.if",
       typeVersion: 2.2,
-      position: [1240, 320]
+      position: [1200, 400]
     },
     {
       parameters: {
@@ -144,14 +173,95 @@ const workflow = {
         url: "=http://localhost:3000/facturas/{{ $json.id }}",
         sendBody: true,
         specifyBody: "json",
-        jsonBody: "={\n  \"estado\": \"{{ $json.estado }}\",\n  \"fechaVencimiento\": \"{{ $json.fechaVencimiento }}\",\n  \"diasHabilesRestantes\": {{ $json.diasHabilesRestantes }},\n  \"recargoMora\": {{ $json.recargoMora }},\n  \"montoTotalConMora\": {{ $json.montoTotalConMora }},\n  \"alertaPrioridad\": \"{{ $json.alertaPrioridad }}\"\n}",
+        jsonBody: "={\n  \"estado\": \"{{ $json.estado }}\",\n  \"fechaVencimiento\": \"{{ $json.fechaVencimiento }}\",\n  \"diasHabilesRestantes\": {{ $json.diasHabilesRestantes }},\n  \"recargoMora\": {{ $json.recargoMora }},\n  \"montoTotalConMora\": {{ $json.montoTotalConMora }},\n  \"tipoCambioAplicado\": {{ $json.tipoCambioAplicado }},\n  \"montoCRC\": {{ $json.montoCRC }},\n  \"montoTotalConMoraCRC\": {{ $json.montoTotalConMoraCRC }},\n  \"alertaPrioridad\": \"{{ $json.alertaPrioridad }}\"\n}",
         options: {}
       },
       id: "node-http-actualizar",
       name: "Actualizar Factura JSON Server",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [1500, 220]
+      position: [1460, 240]
+    },
+    {
+      parameters: {
+        maxItems: 1
+      },
+      id: "node-limit-historial",
+      name: "Filtrar Unico Resumen Historial",
+      type: "n8n-nodes-base.limit",
+      typeVersion: 1,
+      position: [1460, 400]
+    },
+    {
+      parameters: {
+        method: "POST",
+        url: "http://localhost:3000/historial_ejecuciones",
+        sendBody: true,
+        specifyBody: "json",
+        jsonBody: "={{ JSON.stringify($json.nuevoRegistroHistorico) }}",
+        options: {}
+      },
+      id: "node-http-guardar-historial",
+      name: "Guardar Histórico JSON Server",
+      type: "n8n-nodes-base.httpRequest",
+      typeVersion: 4.2,
+      position: [1720, 400],
+      onError: "continueRegularOutput",
+      continueOnFail: true
+    },
+    {
+      parameters: {
+        conditions: {
+          options: {
+            caseSensitive: true,
+            leftValue: "",
+            typeValidation: "strict"
+          },
+          conditions: [
+            {
+              id: "cond-vencida",
+              leftValue: "={{ $json.estado }}",
+              rightValue: "vencida",
+              operator: {
+                type: "string",
+                operation: "equals"
+              }
+            },
+            {
+              id: "cond-empeorando",
+              leftValue: "={{ $json.alertaCriticaTendencia }}",
+              rightValue: true,
+              operator: {
+                type: "boolean",
+                operation: "equals"
+              }
+            }
+          ],
+          combinator: "or"
+        }
+      },
+      id: "node-if-critica",
+      name: "Situación Crítica / Vencida?",
+      type: "n8n-nodes-base.if",
+      typeVersion: 2.2,
+      position: [1720, 240]
+    },
+    {
+      parameters: {
+        fromEmail: "alertas-cobranza@facturacion-ticosoft.cr",
+        toEmail: "gerencia-financiera@facturacion-ticosoft.cr",
+        subject: "=🚨 ALERTA FINANCIERA: Factura {{ $json.id }} ({{ $json.cliente }}) | Tendencia {{ $json.diagnosticoTendencia }}",
+        emailFormat: "html",
+        html: "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa;\">\n  <h2 style=\"color: #c62828; margin-top: 0;\">🚨 Alerta Crítica de Cobranza</h2>\n  <p style=\"font-size: 14px; color: #333;\">El sistema automatizado ha detectado morosidad o deterioro en la cartera:</p>\n  <table style=\"width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;\">\n    <tr style=\"background-color: #fff;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Factura ID:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.id }} ({{ $json.tipoFactura }})</td></tr>\n    <tr style=\"background-color: #f9f9f9;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Cliente:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.cliente }} ({{ $json.tipoCliente }})</td></tr>\n    <tr style=\"background-color: #fff;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Monto Original:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.moneda === 'USD' ? '$' : '₡' }}{{ $json.monto }} {{ $json.moneda }}</td></tr>\n    <tr style=\"background-color: #f9f9f9;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Total con Mora (CRC):</strong></td><td style=\"padding: 8px; border: 1px solid #ddd; color: #c62828; font-weight: bold;\">₡{{ $json.montoTotalConMoraCRC || $json.montoTotalConMora }}</td></tr>\n    <tr style=\"background-color: #fff;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Días de Atraso:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.diasHabilesRestantes }} días hábiles</td></tr>\n    <tr style=\"background-color: #f9f9f9;\"><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Tendencia Global:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd; font-weight: bold;\">{{ $json.diagnosticoTendencia }} (Morosidad: {{ $json.morosidadActualPorcentaje }}%)</td></tr>\n  </table>\n  <p style=\"margin-top: 15px; font-size: 12px; color: #555;\"><strong>Diagnóstico:</strong> {{ $json.resumenDiagnostico }}</p>\n</div>",
+        options: {}
+      },
+      id: "node-email-alerta",
+      name: "Notificar Correo Situación Crítica",
+      type: "n8n-nodes-base.emailSend",
+      typeVersion: 2.1,
+      position: [1980, 240],
+      onError: "continueRegularOutput",
+      continueOnFail: true
     },
     {
       parameters: {
@@ -163,101 +273,101 @@ const workflow = {
       name: "Registro Auditoría Errores",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [1500, 440]
+      position: [1460, 560]
     }
   ],
   connections: {
     "Manual Trigger": {
       main: [
         [
-          {
-            node: "Consultar Feriados CR API",
-            type: "main",
-            index: 0
-          },
-          {
-            node: "Obtener Facturas Pendientes",
-            type: "main",
-            index: 0
-          }
+          { node: "Consultar Feriados CR API", type: "main", index: 0 },
+          { node: "Consultar Tipo de Cambio USD API", type: "main", index: 0 },
+          { node: "Obtener Facturas Pendientes", type: "main", index: 0 },
+          { node: "Obtener Historial Ejecuciones", type: "main", index: 0 }
         ]
       ]
     },
     "Schedule Trigger (08:00 AM)": {
       main: [
         [
-          {
-            node: "Consultar Feriados CR API",
-            type: "main",
-            index: 0
-          },
-          {
-            node: "Obtener Facturas Pendientes",
-            type: "main",
-            index: 0
-          }
+          { node: "Consultar Feriados CR API", type: "main", index: 0 },
+          { node: "Consultar Tipo de Cambio USD API", type: "main", index: 0 },
+          { node: "Obtener Facturas Pendientes", type: "main", index: 0 },
+          { node: "Obtener Historial Ejecuciones", type: "main", index: 0 }
         ]
       ]
     },
     "Consultar Feriados CR API": {
       main: [
         [
-          {
-            node: "Sincronizar Entradas",
-            type: "main",
-            index: 0
-          }
+          { node: "Sincronizar Fuentes (Merge)", type: "main", index: 0 }
+        ]
+      ]
+    },
+    "Consultar Tipo de Cambio USD API": {
+      main: [
+        [
+          { node: "Sincronizar Fuentes (Merge)", type: "main", index: 1 }
         ]
       ]
     },
     "Obtener Facturas Pendientes": {
       main: [
         [
-          {
-            node: "Sincronizar Entradas",
-            type: "main",
-            index: 1
-          }
+          { node: "Sincronizar Fuentes (Merge)", type: "main", index: 2 }
         ]
       ]
     },
-    "Sincronizar Entradas": {
+    "Obtener Historial Ejecuciones": {
       main: [
         [
-          {
-            node: "Procesar Facturas y Calendario (POO)",
-            type: "main",
-            index: 0
-          }
+          { node: "Sincronizar Fuentes (Merge)", type: "main", index: 3 }
         ]
       ]
     },
-    "Procesar Facturas y Calendario (POO)": {
+    "Sincronizar Fuentes (Merge)": {
       main: [
         [
-          {
-            node: "Factura Válida?",
-            type: "main",
-            index: 0
-          }
+          { node: "Procesar Facturas y Tendencia (POO)", type: "main", index: 0 }
+        ]
+      ]
+    },
+    "Procesar Facturas y Tendencia (POO)": {
+      main: [
+        [
+          { node: "Factura Válida?", type: "main", index: 0 }
         ]
       ]
     },
     "Factura Válida?": {
       main: [
         [
-          {
-            node: "Actualizar Factura JSON Server",
-            type: "main",
-            index: 0
-          }
+          { node: "Actualizar Factura JSON Server", type: "main", index: 0 },
+          { node: "Filtrar Unico Resumen Historial", type: "main", index: 0 }
         ],
         [
-          {
-            node: "Registro Auditoría Errores",
-            type: "main",
-            index: 0
-          }
+          { node: "Registro Auditoría Errores", type: "main", index: 0 }
+        ]
+      ]
+    },
+    "Filtrar Unico Resumen Historial": {
+      main: [
+        [
+          { node: "Guardar Histórico JSON Server", type: "main", index: 0 }
+        ]
+      ]
+    },
+    "Actualizar Factura JSON Server": {
+      main: [
+        [
+          { node: "Situación Crítica / Vencida?", type: "main", index: 0 }
+        ]
+      ]
+    },
+    "Situación Crítica / Vencida?": {
+      main: [
+        [
+          { node: "Notificar Correo Situación Crítica", type: "main", index: 0 }
         ]
       ]
     }
